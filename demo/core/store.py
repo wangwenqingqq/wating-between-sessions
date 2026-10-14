@@ -23,7 +23,7 @@ class Store:
                     id TEXT PRIMARY KEY, provider TEXT NOT NULL, state TEXT NOT NULL,
                     turn_id TEXT NOT NULL, started REAL NOT NULL, updated REAL NOT NULL,
                     event TEXT NOT NULL, detail TEXT NOT NULL, opened_turn TEXT DEFAULT '',
-                    sequence REAL NOT NULL DEFAULT 0);
+                    sequence REAL NOT NULL DEFAULT 0, project_name TEXT NOT NULL DEFAULT '');
                 CREATE TABLE IF NOT EXISTS transitions (
                     id INTEGER PRIMARY KEY, session_id TEXT, turn_id TEXT, state TEXT,
                     event TEXT, timestamp REAL);
@@ -42,6 +42,9 @@ class Store:
             columns = {row['name'] for row in db.execute('PRAGMA table_info(imports)')}
             if 'extractor_version' not in columns:
                 db.execute('ALTER TABLE imports ADD COLUMN extractor_version INTEGER NOT NULL DEFAULT 0')
+            columns = {row['name'] for row in db.execute('PRAGMA table_info(sessions)')}
+            if 'project_name' not in columns:
+                db.execute("ALTER TABLE sessions ADD COLUMN project_name TEXT NOT NULL DEFAULT ''")
         self.path.chmod(0o600)
 
     @contextmanager

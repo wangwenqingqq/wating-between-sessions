@@ -62,7 +62,8 @@ function progress() {
   if(!state.sessions.length){box.append(element('p','暂无生命周期事件。启动带插件的 Agent，或启用只读 Codex 适配器。','empty'));return;}
   for(const session of state.sessions){
     const card=element('article','','session');
-    card.append(element('strong',labels[session.state]+' · '+session.provider),element('p',session.stale?'信号超过 15 分钟未更新，状态不确定；不会擅自判断失败。':session.detail),element('small',session.id+' · '+session.event));
+    const name=session.project_name||(session.provider==='demo'?'模拟演示':'未命名项目');
+    card.append(element('strong',name+' · '+labels[session.state]+' · '+session.provider),element('p',session.stale?'信号超过 15 分钟未更新，状态不确定；不会擅自判断失败。':session.detail),element('small',session.id+' · '+session.event));
     box.append(card);
   }
 }

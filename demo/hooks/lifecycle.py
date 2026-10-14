@@ -16,7 +16,8 @@ def main():
             return
         StateManager(Store()).apply(data.get('session_id'), 'claude', data.get('hook_event_name'),
                                     turn_id=data.get('turn_id'), tool=data.get('tool_name', ''),
-                                    notification=data.get('notification_type', ''))
+                                    notification=data.get('notification_type', ''),
+                                    project_name=Path(data['cwd']).name if isinstance(data.get('cwd'), str) else None)
     except Exception:
         print('Waiting panel observer unavailable; host execution is unchanged.', file=sys.stderr)
 

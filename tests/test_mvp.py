@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -95,6 +96,32 @@ class MVPTests(unittest.TestCase):
         self.manager.apply('s', 'codex', 'UserPromptSubmit', turn_id='a', sequence=10, now=102)
         self.manager.apply('s', 'codex', 'PreToolUse', sequence=30, now=103)
         self.assertEqual(self.row()['state'], 'COMPLETED')
+
+    def test_project_names_are_isolated_persisted_and_backfilled_without_replay(self):
+        self.manager.apply('a', 'codex', 'UserPromptSubmit', now=100, sequence=10)
+        self.manager.apply('a', 'codex', 'Stop', now=105, sequence=20)
+        self.manager.apply('a', 'codex', 'Stop', now=105, sequence=20, project_name='Project Alpha')
+        self.manager.apply('b', 'codex', 'UserPromptSubmit', now=106, project_name='Project Beta')
+        self.manager.apply('b', 'codex', 'Heartbeat', now=107)
+        rows = {r['id']: r for r in StateManager(Store(self.store.root)).snapshot(110)}
+        self.assertEqual(rows['codex:a']['project_name'], 'Project Alpha')
+        self.assertEqual(rows['codex:a']['state'], 'COMPLETED')
+        self.assertEqual(rows['codex:b']['project_name'], 'Project Beta')
+        self.assertEqual(rows['codex:b']['started'], 106)
+        with self.store.connect() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM transitions').fetchone()[0], 3)
+
+    def test_project_name_schema_migration_preserves_old_state(self):
+        root = self.root / 'legacy';root.mkdir()
+        with sqlite3.connect(root / 'timeline.db') as db:
+            db.execute('''CREATE TABLE sessions (id TEXT PRIMARY KEY, provider TEXT, state TEXT,
+                turn_id TEXT, started REAL, updated REAL, event TEXT, detail TEXT,
+                opened_turn TEXT, sequence REAL)''')
+            db.execute("INSERT INTO sessions VALUES ('codex:old','codex','COMPLETED','turn',100,105,'Stop','done','turn',20)")
+        manager = StateManager(Store(root))
+        manager.apply('old', 'codex', 'Stop', sequence=20, project_name='Legacy Project')
+        row = manager.snapshot(110)[0]
+        self.assertEqual((row['state'], row['started'], row['project_name']), ('COMPLETED', 100, 'Legacy Project'))
 
     def test_stale_is_unknown_not_failed(self):
         self.manager.apply('s', 'claude', 'UserPromptSubmit', now=100)
@@ -235,6 +262,28 @@ class MVPTests(unittest.TestCase):
     def test_private_permissions(self):
         self.assertEqual(self.store.root.stat().st_mode & 0o777, 0o700)
         self.assertEqual(self.store.path.stat().st_mode & 0o777, 0o600)
+
+    def test_watcher_uses_matching_title_with_directory_fallback(self):
+        root = self.root / 'rollouts';root.mkdir()
+        (self.root / 'session_index.jsonl').write_text(json.dumps({'id':'a','thread_name':'Named Project'}) + '\ninvalid\n')
+        for sid in ['a', 'b']:
+            rows = [dict(type='session_meta', payload=dict(id=sid, source='vscode', cwd=str(self.root / ('project-' + sid)))),
+                    dict(type='event_msg', timestamp='2026-10-14T00:00:00Z', payload=dict(type='task_started', turn_id=sid))]
+            (root / (sid + '.jsonl')).write_text('\n'.join(json.dumps(r) for r in rows) + '\n')
+        CodexWatcher(self.manager, root).poll()
+        rows = {r['id']:r for r in self.manager.snapshot(110)}
+        self.assertEqual(rows['codex:a']['project_name'], 'Named Project')
+        self.assertEqual(rows['codex:b']['project_name'], 'project-b')
+
+    def test_hook_captures_directory_name_without_full_path(self):
+        cwd = self.root / 'Hook Project'
+        result = subprocess.run([sys.executable, str(ROOT / 'demo/hooks/lifecycle.py')],
+                                input=json.dumps(dict(session_id='s', hook_event_name='SessionStart', cwd=str(cwd))),
+                                text=True, capture_output=True, env=dict(os.environ, AWE_DATA_DIR=str(self.store.root)), timeout=4)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, '')
+        self.assertEqual(self.row()['project_name'], 'Hook Project')
+        self.assertNotIn(str(cwd), json.dumps(self.row()))
 
 
 class HTTPTests(unittest.TestCase):

@@ -10,7 +10,7 @@ class StateManager:
         self.store = store
 
     def apply(self, session, provider, event, *, turn_id=None, tool='', notification='',
-              sequence=0, now=None):
+              sequence=0, now=None, project_name=None):
         if not isinstance(session, str) or not 0 < len(session) <= 200:
             raise ValueError('Invalid session ID')
         if provider not in {'claude', 'codex', 'demo'}:
@@ -21,7 +21,12 @@ class StateManager:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM sessions WHERE id=?', (sid,)).fetchone()
             old = dict(row) if row else dict(state='IDLE', turn_id='', started=now,
-                                            opened_turn='', sequence=0)
+                                            opened_turn='', sequence=0, project_name='')
+            project = project_name.strip()[:160] if isinstance(project_name, str) else ''
+            project = project or old['project_name']
+            if row and project != old['project_name']:
+                # Metadata backfill must not replay lifecycle transitions or restart a turn.
+                db.execute('UPDATE sessions SET project_name=? WHERE id=?', (project, sid))
             if sequence and sequence <= old['sequence']:
                 return
             if event != 'UserPromptSubmit' and turn_id and old['turn_id'] and turn_id != old['turn_id']:
@@ -62,9 +67,9 @@ class StateManager:
                 return
             seq = sequence or old['sequence']
             db.execute('''INSERT OR REPLACE INTO sessions
-                (id,provider,state,turn_id,started,updated,event,detail,opened_turn,sequence)
-                VALUES (?,?,?,?,?,?,?,?,?,?)''',
-                       (sid, provider, state, turn, started, now, event, detail, old['opened_turn'], seq))
+                (id,provider,state,turn_id,started,updated,event,detail,opened_turn,sequence,project_name)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
+                       (sid, provider, state, turn, started, now, event, detail, old['opened_turn'], seq, project))
             if state != old['state'] or turn != old['turn_id']:
                 db.execute('INSERT INTO transitions(session_id,turn_id,state,event,timestamp) VALUES (?,?,?,?,?)',
                            (sid, turn, state, event, now))

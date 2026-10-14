@@ -62,6 +62,12 @@ only fixture/subprocess validation, not live-host acceptance. See the
 
 ### Codex compatibility boundary
 
+Progress cards show the session/project name before the lifecycle status. For
+Codex this prefers the matching title in the local `session_index.jsonl` beside
+the rollout directory, falling back to the session's working-directory basename.
+Claude Hooks use the working-directory basename. Unknown names are labeled
+explicitly; no full working-directory path is added to state storage or display.
+
 `--watch-codex` is an **experimental read-only rollout adapter**, not an installed
 Codex hook or stable public API. It observes explicit local `task_started`,
 `task_complete`, and `turn_aborted` events. Tool activity does not reset the turn
@@ -125,6 +131,7 @@ automatically. There is no percentage-progress estimate.
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q demo experiments tests
 node --check demo/ui/web/app.js   # Optional Node.js syntax check
+node --test tests/test_ui.cjs     # Optional Node.js Progress rendering regression
 python3 experiments/benchmark.py # 30 SYNTHETIC scenarios, not 30 real tasks
 python3 experiments/evaluate_history.py
 python3 demo/app.py simulate --seconds 8  # Clearly labeled synthetic UI smoke test

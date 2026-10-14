@@ -38,11 +38,27 @@ class CodexWatcher:
         self.last_scan = float('-inf')
         self.errors = 0
         self.calls = {}
+        self.names = {}
+        self.projects = {}
 
     def discover(self):
         if time.monotonic() - self.last_scan < 5:
             return
         self.last_scan = time.monotonic()
+        try:
+            with (self.root.parent / 'session_index.jsonl').open(encoding='utf-8', errors='replace') as index:
+                names = {}
+                for raw in index:
+                    try:
+                        entry = json.loads(raw)
+                    except (ValueError, UnicodeError):
+                        continue
+                    if (isinstance(entry, dict) and isinstance(entry.get('id'), str)
+                            and isinstance(entry.get('thread_name'), str)):
+                        names[entry['id']] = entry['thread_name']
+                self.names = names
+        except OSError:
+            pass
         for path in self.root.rglob('*.jsonl'):
             if path in self.files or path.is_symlink():
                 continue
@@ -58,6 +74,8 @@ class CodexWatcher:
                     if isinstance(source, dict) and 'subagent' in source:
                         continue
                     sid = meta.get('id', meta.get('session_id', path.stem))
+                    cwd = meta.get('cwd')
+                    self.projects[str(sid)] = Path(cwd).name if isinstance(cwd, str) else ''
                     offset = max(0, stat.st_size - 2 * 1024 ** 2)
                     if offset:
                         f.seek(offset)
@@ -93,7 +111,8 @@ class CodexWatcher:
             except (KeyError, ValueError, TypeError):
                 return
             self.manager.apply(sid, 'codex', event, turn_id=turn, tool=tool,
-                               sequence=offset, now=stamp)
+                               sequence=offset, now=stamp,
+                               project_name=self.names.get(sid) or self.projects.get(sid))
 
     def poll(self):
         self.discover()

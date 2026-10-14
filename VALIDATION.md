@@ -105,4 +105,3 @@ not granted automatically. Deletion was tested only against disposable fixtures.
 4. Browser/OS notification behavior with background, frozen and closed pages.
 5. Only then admit the user study; no retention, business or novelty conclusion
    follows from the current prototype.
-

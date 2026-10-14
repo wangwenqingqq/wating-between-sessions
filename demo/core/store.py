@@ -74,4 +74,3 @@ class Store:
         with self.connect() as db:
             db.execute('VACUUM')
         (self.root / 'human-review.csv').unlink(missing_ok=True)
-

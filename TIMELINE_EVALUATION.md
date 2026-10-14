@@ -68,4 +68,3 @@ not just a matching quote. Retain failures and ambiguous cases. Require >=45/50
 supported events before claiming the plan's 90% semantic gate, and separately
 report classification mistakes. Do not overwrite the held-out sample after a
 failure; revise on a development set and draw a fresh evaluation sample.
-

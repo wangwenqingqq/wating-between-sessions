@@ -44,4 +44,3 @@ trial_id,host_version,task_class,expected_start,observed_start,expected_wait_use
 Count correctness against independent host observation, not this app's own state
 as its oracle. Record recoverable tool errors, permissions, aborts, long reasoning,
 concurrent sessions, and host crashes. Missing evidence is unknown, not a pass.
-

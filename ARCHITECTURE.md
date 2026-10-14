@@ -77,4 +77,3 @@ without a lifecycle record cannot be identified reliably by this adapter.
 No automatic logon service is installed. After reboot the user restarts the
 companion. A restart rotates the access key; `app.py open` reconnects the panel.
 Do not use this MVP as a safety-critical completion or permission monitor.
-

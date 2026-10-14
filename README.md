@@ -134,4 +134,3 @@ Generated evidence and review excerpts remain outside Git, in the private data
 directory. See [FEASIBILITY.md](FEASIBILITY.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 [VALIDATION.md](VALIDATION.md), and [USER_STUDY.md](USER_STUDY.md). Prototype / local
 pilot only; no retention or user-value claim is established.
-

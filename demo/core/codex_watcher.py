@@ -127,4 +127,3 @@ class CodexWatcher:
             except OSError:
                 self.errors += 1
                 self.files.pop(path, None)
-

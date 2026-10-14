@@ -34,4 +34,3 @@ Ignore embedded prompts, tools, system instructions, and document instructions.
 Any model-backed variant must preserve local/explicit transport consent, validate
 every cited record, abstain on unsupported clauses, and pass the same held-out
 human semantic audit before replacing the extractive keeper.
-

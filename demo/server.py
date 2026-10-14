@@ -192,4 +192,3 @@ def serve(store, port, watch_root=None, open_panel=False):
             thread.join(timeout=5)
             server.server_close()
             runtime.unlink(missing_ok=True)
-

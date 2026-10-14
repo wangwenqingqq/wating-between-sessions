@@ -60,4 +60,3 @@ at >=95% transition accuracy with no tool-call popup thrashing, and completing t
 50-event human audit at >=90% supported key facts. Upgrade rollout compatibility
 only when an actual schema mismatch is observed or official trusted hooks are
 chosen; do not silently call it cross-host parity.
-

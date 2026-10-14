@@ -99,4 +99,3 @@ class StateManager:
             if changed:
                 return True
         return False
-

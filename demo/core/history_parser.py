@@ -205,4 +205,3 @@ def verify_evidence(event):
     except (OSError, ValueError, TypeError):
         pass
     return False
-

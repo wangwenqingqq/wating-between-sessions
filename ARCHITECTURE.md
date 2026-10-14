@@ -26,12 +26,22 @@ Explicit local import ─ Parser / extractor ─ Timeline ─ filtered cards
 | `core/state_manager.py` | Transactional per-provider/session turn state; panel debounce |
 | `core/codex_watcher.py` | Read-only bounded JSONL tail; explicit experimental compatibility |
 | `core/history_parser.py` | Parse, exclude instructions/secret patterns, extract, deduplicate, filter, verify |
+| `core/chronicles.py` | Read-only topic classification, deduplicated inventory, sourced chapters and full chronology |
 | `core/store.py` | Private SQLite schema, settings, derived-history deletion |
 | `demo/server.py` | Loopback API, authentication, safe static allowlist, opener worker |
 | `demo/ui/web/` | Framework-free accessible tabs, filters, evidence dialog, controls |
 | `experiments/` | Synthetic regression / private evidence audit utilities |
 
 Paths in this table are repository-relative for documentation only.
+
+The authenticated `/api/chronicles` route groups already-consented stored excerpts
+without reimporting histories, mutating evidence, or using a model API. Topics are
+keyword matches with research/general fallbacks. Cross-references are explicit;
+inventory counts unique original records, not summed topic memberships. Dossier
+chapters select existing records by date/kind and preserve their exact source
+references. Dates have day precision: same-day records follow session and
+source-line order, not an inferred cross-session timestamp. No record means no
+chapter, not an inferred decision or achievement.
 
 ## State contract
 

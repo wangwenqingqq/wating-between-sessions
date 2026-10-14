@@ -323,6 +323,19 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(self.request('/api/delete-history', data={'confirm': 'no'}).status, 400)
         self.assertEqual(self.request('/api/delete-history', data={'confirm': 'DELETE'}).status, 200)
 
+    def test_chronicles_auth_consent_and_topic_validation(self):
+        self.assertEqual(self.request('/api/chronicles', auth=False).status, 401)
+        self.assertEqual(self.request('/api/chronicles', Origin='https://evil.invalid').status, 403)
+        self.assertEqual(json.load(self.request('/api/chronicles'))['stats']['events'], 0)
+        path = MVPTests.history(self)
+        self.store.set('history_enabled', True)
+        import_history(self.store, path.parent, 'codex')
+        result = json.load(self.request('/api/chronicles'))
+        self.assertEqual(result['stats']['events'], 2)
+        self.assertEqual(self.request('/api/chronicles?topic=not-real').status, 404)
+        self.store.clear_history()
+        self.assertEqual(json.load(self.request('/api/chronicles'))['topics'], [])
+
     def test_completion_feed_survives_a_new_turn_between_polls(self):
         start = json.load(self.request('/api/state'))['next_signal']
         now = self.server.observation_started

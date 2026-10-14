@@ -5,6 +5,7 @@ if (fragment) { sessionStorage.setItem('awe-key', fragment); history.replaceStat
 const token = sessionStorage.getItem('awe-key') || '';
 let mode = 'timeline', state = null, inventory = '', signalCursor = null;
 let dismissed = new Set(), panelClosed = false, loading = false;
+let chronicleData = null, selectedTopic = '', chronicleDomain = '', chronicleKind = '', contentRequest = 0;
 const kinds = {request:'当时的请求', reported_result:'助手自报结果 · 未独立验证', decision:'用户明确选择', open_question:'当时尚未解决'};
 const categories = {research:'研究',engineering:'工程',learning:'学习',general:'日常'};
 const labels = {IDLE:'等待新任务',WORKING:'Agent 正在工作',WAITING_USER:'Agent 需要你的确认',COMPLETED:'本轮执行已结束',FAILED:'执行中断或失败'};
@@ -24,7 +25,7 @@ $('notice-dismiss').onclick=()=>{$('notice').hidden=true;};
 for (const dialog of document.querySelectorAll('dialog')) dialog.querySelector('.dialog-close').onclick=()=>dialog.close();
 $('settings-open').onclick=()=>$('settings-dialog').showModal();
 
-async function source(event, card) {
+async function source(event, card=null) {
   try {
     const data=await api('source',{event_id:event.event_id});
     $('source-verified').textContent=data.verified?'✓ 原始记录哈希与摘录一致':'⚠ 原始记录已变化或不可用；下面是导入时保存的摘录';
@@ -32,30 +33,102 @@ async function source(event, card) {
     const dl=$('source-location');dl.replaceChildren();
     for(const [name,value] of [['会话',data.source_provider+' / '+data.source_session_id],['原始位置',data.source_path+':'+data.source_line],['记录 SHA-256',data.source_hash]])dl.append(element('dt',name),element('dd',value));
     $('source-dialog').showModal();
-    await api('read',{event_id:event.event_id});card.querySelector('.unread').textContent='已读';
+    await api('read',{event_id:event.event_id});event.read_at=Date.now()/1000;
+    const marker=card?.querySelector('.unread');if(marker)marker.textContent='已读';
+    if(chronicleData?.selected){
+      for(const entry of [...chronicleData.selected.events,...Object.values(chronicleData.selected.chapters)]){
+        if(entry?.event_id===event.event_id)entry.read_at=event.read_at;
+      }
+      if(mode==='timeline')renderChronicles(chronicleData);
+    }
   } catch(error) { showError(error.message); }
 }
 async function loadCards() {
   if(mode==='progress'||!state)return;
-  if(!state.history_enabled){empty('历史分析已关闭。你仍可以查看 Progress；需要时在隐私设置中重新启用。');return;}
+  const request=++contentRequest,requestedMode=mode;
+  if(!state.history_enabled){
+    chronicleData=null;$('chronicles').replaceChildren();$('cards').replaceChildren();
+    const target=mode==='timeline'?$('chronicles'):$('cards');
+    target.append(element('div','历史分析已关闭。你仍可以查看 Progress；需要时在隐私设置中重新启用。','empty'));return;
+  }
   try {
+    if(mode==='timeline'){
+      const data=await api('chronicles?'+new URLSearchParams({month:$('month').value,topic:selectedTopic}));
+      if(request!==contentRequest||mode!==requestedMode)return;
+      chronicleData=data;renderChronicles(data);return;
+    }
     const params=new URLSearchParams({mode,month:$('month').value,topic:$('topic').value});
     const events=await api('events?'+params);
+    if(request!==contentRequest||mode!==requestedMode)return;
     $('cards').replaceChildren();
     if(!events.length){empty(mode==='discovery'?'还没有明确标记为未解决的问题。我们不会把普通提问推断成遗留问题。':'这个范围里还没有历史卡片。请在本机授权导入历史，或切换月份和主题。');return;}
-    for(const event of events){
-      const card=$('card-template').content.firstElementChild.cloneNode(true);
-      card.querySelector('.card-date').textContent=event.date;
-      card.querySelector('.kind').textContent=kinds[event.kind]||event.kind;
-      card.querySelector('.category').textContent=categories[event.category]||event.category;
-      card.querySelector('.unread').textContent=event.read_at?'已读':'未读';
-      card.querySelector('h2').textContent=event.title;
-      card.querySelector('.quote').textContent=event.summary;
-      card.querySelector('.provider').textContent=event.source_provider.toUpperCase()+' · 原文摘录';
-      card.querySelector('.evidence').onclick=()=>source(event,card);
-      $('cards').append(card);
-    }
-  }catch(error){showError(error.message);}
+    for(const event of events)$('cards').append(eventCard(event));
+  }catch(error){if(request===contentRequest&&mode===requestedMode)showError(error.message);}
+}
+function eventCard(event) {
+  const card=$('card-template').content.firstElementChild.cloneNode(true);
+  for(const [selector,text]of[['.card-date',event.date],['.kind',kinds[event.kind]||event.kind],['.category',categories[event.category]||event.category],['.unread',event.read_at?'已读':'未读'],['h2',event.title],['.quote',event.summary],['.provider',event.source_provider.toUpperCase()+' · 原文摘录']])card.querySelector(selector).textContent=text;
+  card.querySelector('.evidence').onclick=()=>source(event,card);return card;
+}
+async function openChronicle(key) {
+  selectedTopic=key;chronicleKind='';await loadCards();$('chronicles').scrollIntoView({block:'start'});
+}
+function renderChronicles(data) {
+  const root=$('chronicles');root.replaceChildren();
+  if(data.selected){renderDossier(data.selected,root);return;}
+  const heading=element('div','','chronicle-heading');
+  heading.append(element('p','PERSONAL CHRONICLES','eyebrow'),element('h2','专题列传'),element('p','把零散对话收进不同的卷，沿着课题回看自己的来路。','subtle'));
+  root.append(heading);
+  if(!data.stats.events){root.append(element('div','这个月份还没有可归档的片段。可以切换月份，或在本机授权导入历史。','empty'));return;}
+  const stats=element('div','','chronicle-stats');
+  for(const [value,label]of[[data.stats.topics,'个专题'],[data.stats.sessions,'段会话'],[data.stats.events,'条原文']]){
+    const stat=element('div');stat.append(element('strong',String(value)),element('span',label));stats.append(stat);
+  }
+  stats.append(element('p',data.stats.first_date+' — '+data.stats.last_date,'chronicle-range'));root.append(stats);
+  const filters=element('div','','domain-filters');filters.setAttribute('aria-label','专题分类');
+  for(const domain of[{id:'',title:'全部专题',count:data.stats.topics},...data.domains]){
+    const button=element('button',domain.title+' · '+domain.count,'domain-chip'+(chronicleDomain===domain.id?' active':''));
+    button.setAttribute('aria-pressed',String(chronicleDomain===domain.id));button.onclick=()=>{chronicleDomain=domain.id;renderChronicles(chronicleData);};filters.append(button);
+  }
+  root.append(filters);
+  const grid=element('div','','topic-grid');
+  const topics=data.topics.filter(t=>!chronicleDomain||t.domain===chronicleDomain);
+  if(!topics.length)grid.append(element('p','这个分类在当前月份没有记录。','empty'));
+  topics.forEach((topic)=>{
+    const book=element('button','','topic-book');book.setAttribute('aria-label','阅读'+topic.title+'列传');
+    book.append(element('span',topic.domain_label+' / 卷 '+String(data.topics.indexOf(topic)+1).padStart(2,'0'),'book-label'),element('h3',topic.title),element('p',topic.subtitle,'book-subtitle'),element('p','“'+topic.preview+'”','book-preview'));
+    const bottom=element('div','','book-bottom');bottom.append(element('span',topic.count+' 条原文 · '+topic.sessions+' 段会话'),element('span','翻开这一卷 ↗'));
+    book.append(element('p',topic.first_date+' — '+topic.last_date,'book-dates'),bottom);book.onclick=()=>openChronicle(topic.id);grid.append(book);
+  });
+  root.append(grid,element('p','按原文关键词归档；跨专题的记录会交叉收录，总原文数去重计算。分类不是对经历或成果的推断。','chronicle-note'));
+}
+function renderDossier(topic,root) {
+  const back=element('button','← 返回专题书架','quiet dossier-back');back.onclick=()=>openChronicle('');root.append(back);
+  const heading=element('div','','dossier-heading');
+  heading.append(element('p',topic.domain_label+' / 专题列传','eyebrow'),element('h2',topic.title),element('p',topic.subtitle,'subtle'));root.append(heading);
+  if(!topic.events.length){root.append(element('div','当前月份没有这一专题的原文。可以切换月份或返回书架。','empty'));return;}
+  root.append(element('p',`现有记录覆盖 ${topic.first_date} 至 ${topic.last_date}，来自 ${topic.sessions} 段会话，共 ${topic.count} 条原文。以下只串联当时的记录，不补写结局。`,'dossier-intro'));
+  const chapters=element('div','','chapter-grid');
+  for(const[kind,title]of[['request','卷首 · 当时的请求'],['decision','转折 · 明确的选择'],['reported_result','回声 · 助手自报的阶段结果'],['open_question','留白 · 当时尚未解决']]){
+    const event=topic.chapters[kind];if(!event)continue;
+    const chapter=element('article','','chapter');chapter.append(element('h3',title),element('small',event.date),element('p',event.summary));
+    const link=element('button','查看这段原文 ↗','evidence');link.onclick=()=>source(event);chapter.append(link);chapters.append(chapter);
+  }
+  root.append(chapters,element('p','章节为现有记录的选段。助手自报不等于独立验证；当时未解的问题也可能已在后续会话解决。同日记录按会话与原文行号排列，不代表跨会话先后。','chronicle-note'));
+  const filters=element('div','','dossier-filters');
+  for(const[kind,title]of[['','全部记录'],['request','当时请求'],['decision','明确选择'],['reported_result','阶段自报'],['open_question','历史未解']]){
+    const count=kind?topic.kinds[kind]:topic.count;
+    const button=element('button',title+' · '+count,'domain-chip'+(chronicleKind===kind?' active':''));
+    button.setAttribute('aria-pressed',String(chronicleKind===kind));button.onclick=()=>{chronicleKind=kind;renderChronicles(chronicleData);};filters.append(button);
+  }
+  root.append(filters);
+  const records=element('div','','dossier-events');let month='';
+  for(const event of topic.events.filter(e=>!chronicleKind||e.kind===chronicleKind)){
+    if(event.date.slice(0,7)!==month){month=event.date.slice(0,7);records.append(element('h3',month,'dossier-month'));}
+    records.append(eventCard(event));
+  }
+  if(!records.children.length)records.append(element('div','这卷暂时没有这一类记录；没有证据时，我们保留空白。','empty'));
+  root.append(records);
 }
 function progress() {
   const box=$('progress');box.replaceChildren();
@@ -112,8 +185,8 @@ async function poll() {
 for(const button of document.querySelectorAll('.tab'))button.onclick=()=>{
   mode=button.dataset.mode;
   document.querySelectorAll('.tab').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',String(b===button));});
-  $('filters').hidden=mode==='progress';$('cards').hidden=mode==='progress';$('progress').hidden=mode!=='progress';
-  $('content-hint').textContent=mode==='discovery'?'仅展示当时明确的未解决记录，当前是否解决仍需核实。':'来自原始对话，不替历史补写结论。';
+  $('filters').hidden=mode==='progress';$('cards').hidden=mode!=='discovery';$('chronicles').hidden=mode!=='timeline';$('progress').hidden=mode!=='progress';$('category-filter').hidden=mode!=='discovery';
+  $('content-hint').textContent=mode==='discovery'?'仅展示当时明确的未解决记录，当前是否解决仍需核实。':'以课题为卷，沿着原文回看。';
   if(mode==='progress')progress();else loadCards();
 };
 $('month').onchange=loadCards;$('topic').onchange=loadCards;

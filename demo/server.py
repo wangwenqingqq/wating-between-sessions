@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from core.codex_watcher import CodexWatcher
+from core.chronicles import load_chronicles
 from core.history_parser import select_content, verify_evidence
 from core.state_manager import StateManager
 
@@ -111,6 +112,13 @@ class Handler(BaseHTTPRequestHandler):
             q = parse_qs(url.query)
             return self.reply(200, select_content(self.server.store, q.get('mode', ['timeline'])[0],
                                                  q.get('month', [''])[0], q.get('topic', [''])[0]))
+        if url.path == '/api/chronicles':
+            q = parse_qs(url.query)
+            try:
+                data = load_chronicles(self.server.store, q.get('month', [''])[0], q.get('topic', [''])[0])
+            except ValueError:
+                return self.reply(404, {'error': 'Unknown chronicle topic'})
+            return self.reply(200, data)
         self.reply(404, {'error': 'Not found'})
 
     def do_POST(self):

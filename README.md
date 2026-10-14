@@ -82,6 +82,19 @@ MVP does not manipulate that trust state or claim to install such hooks.
 
 ## What the timeline means
 
+- Timeline opens a thematic shelf: research/experiments, embodied/sensing,
+  tools/creation, life/choices, and unassigned fragments. Open a volume to see its
+  sourced request, explicit choice (when present), self-reported result,
+  historical unresolved question, and all stored records ordered by date.
+  Within one day, records follow session and source-line order; cross-session
+  ordering is unknown. Chapters are selected excerpts, not verified milestones.
+- Classification is local keyword matching, not a model-generated biography.
+  Cross-topic records may appear in several volumes; the global event/session
+  inventory remains deduplicated. Unmatched records stay visible instead of being
+  forced into an unsupported story. The month filter scopes both counts and text.
+- A volume reads every matching stored excerpt, not the old 100-card timeline
+  page. Kind filters distinguish requests, choices, reported results and historical
+  questions. Chapters with no supporting record are omitted, never invented.
 - Cards are bounded excerpts of user text / final assistant messages, not invented
   biographical facts. No analysis or tool-output record is displayed.
 - An assistant-reported result is not independent proof of task completion.

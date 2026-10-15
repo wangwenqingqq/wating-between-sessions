@@ -4,7 +4,7 @@ const fragment = location.hash.slice(1);
 if (fragment) { sessionStorage.setItem('awe-key', fragment); history.replaceState(null, '', '/'); }
 const token = sessionStorage.getItem('awe-key') || '';
 let mode = 'timeline', state = null, inventory = '', signalCursor = null;
-let panelClosed = true, loading = false, invitationTurns = [], invitationNotification = null;
+let loading = false, invitationTurns = [], invitationNotification = null;
 let offered = new Set();
 try { offered = new Set(JSON.parse(sessionStorage.getItem('awe-invited') || '[]')); } catch (_) { /* A damaged tab cache must not prevent entry. */ }
 let sessionsExpanded = false, sessionInventory = '';
@@ -60,17 +60,13 @@ function hideInvitation() {
   $('wait-invitation').hidden=true;invitationTurns=[];
   invitationNotification?.close();invitationNotification=null;
 }
-function closePanel() {
-  panelClosed=true;$('panel').hidden=true;$('panel-reopen').hidden=false;$('panel-close').hidden=true;
+function enterWaitingSpace() {
   if(state)rememberOffers(state.sessions);hideInvitation();
-}
-function openPanel() {
-  panelClosed=false;$('panel').hidden=false;$('panel-reopen').hidden=true;$('panel-close').hidden=false;
-  if(state)rememberOffers(state.sessions);hideInvitation();loadCards();
+  $('panel').scrollIntoView({block:'start'});
 }
 function updateInvitation() {
   const eligible=state?.auto_show?state.sessions.filter(s=>s.panel_due):[];
-  if(!panelClosed||$('bottle-panel')?.hidden===false){rememberOffers(eligible);hideInvitation();return;}
+  if(document.visibilityState!=='hidden'||$('bottle-panel')?.hidden===false){rememberOffers(eligible);hideInvitation();return;}
   invitationTurns=invitationTurns.filter(key=>eligible.some(s=>turnKey(s)===key));
   if(!invitationTurns.length)hideInvitation();
   const fresh=eligible.filter(s=>!offered.has(turnKey(s)));
@@ -84,14 +80,14 @@ function updateInvitation() {
     try {
       const notification=invitationNotification=new Notification('Between · 等候之间',{body:'Agent 还在工作。点击进入等待空间，也可以忽略。',tag:'between-wait-invitation',silent:true});
       notification.onclick=async()=>{
-        if(invitationNotification!==notification||!panelClosed||$('wait-invitation').hidden||!state?.auto_show||!state.sessions.some(s=>s.panel_due&&invitationTurns.includes(turnKey(s))))return;
+        if(invitationNotification!==notification||$('wait-invitation').hidden||!state?.auto_show||!state.sessions.some(s=>s.panel_due&&invitationTurns.includes(turnKey(s))))return;
         const turns=[...invitationTurns];
         try {
           // A background tab's last poll may predate completion or an opt-out.
           const latest=await api('state');
-          if(invitationNotification!==notification||!panelClosed||$('wait-invitation').hidden)return;
+          if(invitationNotification!==notification||$('wait-invitation').hidden)return;
           if(!latest.auto_show||!latest.sessions.some(s=>s.panel_due&&turns.includes(turnKey(s)))){hideInvitation();return;}
-          state=latest;window.focus();openPanel();
+          state=latest;window.focus();enterWaitingSpace();
         } catch (_) {
           if(invitationNotification===notification){hideInvitation();showError('无法确认当前会话状态，未进入等待空间。你可以稍后手动进入。');}
         }
@@ -99,8 +95,7 @@ function updateInvitation() {
     } catch (_) { /* The non-modal page invitation remains available. */ }
   }
 }
-$('panel-close').onclick=closePanel; $('panel-reopen').onclick=openPanel;
-$('wait-enter').onclick=openPanel;$('wait-dismiss').onclick=hideInvitation;
+$('wait-enter').onclick=enterWaitingSpace;$('wait-dismiss').onclick=hideInvitation;
 $('session-toggle').onclick=()=>{
   sessionsExpanded=!sessionsExpanded;$('session-list').hidden=!sessionsExpanded;
   $('session-toggle').setAttribute('aria-expanded',String(sessionsExpanded));renderSessions();
@@ -139,7 +134,6 @@ async function loadCards() {
     const target=mode==='timeline'?$('chronicles'):$('cards');
     target.append(element('div','历史分析已关闭。你仍可以展开上方的会话列表；需要时在隐私设置中重新启用。','empty'));return;
   }
-  if(panelClosed)return;
   try {
     if(mode==='timeline'){
       const data=await api('chronicles?'+new URLSearchParams({month:$('month').value,topic:selectedTopic}));
@@ -265,7 +259,7 @@ async function poll() {
     const active=state.sessions.filter(s=>['WORKING','WAITING_USER'].includes(s.state));
     const current=active.find(s=>s.state==='WAITING_USER')||active[0]||state.sessions[0];
     $('status-title').textContent=current?(labels[current.state]+(active.length>1?` · ${active.length} 个会话`:'')):'等待你的下一个任务';
-    $('status-detail').textContent=current?(current.stale?'信号暂未更新，状态不确定':current.provider.toUpperCase()+' · '+current.detail):'连接已就绪。等待超过 5 秒时轻声邀请，由你决定是否进入。';
+    $('status-detail').textContent=current?(current.stale?'信号暂未更新，状态不确定':current.provider.toUpperCase()+' · '+current.detail):'连接已就绪，等待空间已展示；完成时轻声提醒。';
     $('status-dot').className='status-dot'+(current?.state==='WORKING'?' working':current?.state==='WAITING_USER'?' attention':'');
     $('elapsed').textContent=current&&active.length?duration(current.elapsed):'已就绪';
     renderSessions();

@@ -1,6 +1,29 @@
 # Validation and evidence ledger
 
-## Opt-in waiting revision — 2026-10-15
+## Always-visible waiting space — 2026-10-15
+
+This revision supersedes the collapsed reading-panel contract in the historical
+records below. Opening or reloading the page directly displays Timeline/Discovery;
+the enter/hide controls and runtime hiding gate are removed. History-disabled
+profiles still show only a privacy empty state and never fetch reading content.
+Foreground reading suppresses invitations. Optional background invitations,
+permission checks, per-turn suppression, fresh-state click validation and
+non-interrupting completion remain; only an explicit invitation click may focus
+the page and scroll to the existing reading section.
+
+The revision passes 53 Python and 29 Node tests. Regression checks cover automatic
+initial content loading, stable content/focus/scroll across tool ticks and
+completion, consent-disabled history, notification gating and stale-click races.
+Earlier counts and collapsed-panel observations below describe earlier revisions,
+not the current default.
+
+Live browser QA refreshed the existing local service without an entry click and
+observed all 12 topics / 223 records in the visible shelf. At 1,280px and 390px,
+the entry/hide controls were absent and no horizontal overflow occurred. Discovery
+rendered 42 historical unresolved excerpts, then Timeline was restored. No evidence
+dialog was opened and no real session or history setting was changed.
+
+## Historical opt-in waiting revision — 2026-10-15
 
 The original auto-open contract below is historical and superseded. The current
 contract is a five-second **invitation**, not a window/panel open. Backend ticks

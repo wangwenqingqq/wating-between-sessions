@@ -44,8 +44,8 @@ schema upgrade backfills receipts for active pre-receipt test records. Schema,
 backfill and completion marker commit atomically under the same SQLite writer
 lock; failures roll back and another instance can retry the migration.
 
-The reading panel and bottle panel collapse independently. Active bottle use
-suppresses redundant waiting invitations without sending anything to the Agent.
+The reading section stays visible independently of the collapsible bottle panel.
+Active bottle use suppresses redundant waiting invitations without sending anything to the Agent.
 The original Timeline/Discovery and completion paths remain separate.
 
 ## Run two local profiles

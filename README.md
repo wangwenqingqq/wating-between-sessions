@@ -4,7 +4,8 @@ A local waiting panel with an evidence-linked conversation timeline. No model
 API, third-party Python package, telemetry, or host source modification is needed.
 The interface is in Chinese; project documentation is in English.
 
-**Implemented:** lifecycle state machine, five-second optional waiting invitation, Timeline /
+**Implemented:** lifecycle state machine, always-visible waiting space,
+five-second optional background invitation, Timeline /
 Discovery, collapsible live sessions, non-interrupting completion notices, per-session isolation,
 local import/deduplication, source-record verification, and privacy controls.
 The intro also has an opt-in **research drift-bottle exchange** for two local
@@ -30,8 +31,9 @@ On macOS, double-click `demo/start.command` after the consented import. It start
 the same service and opens the panel. It does not install a login item. Once the
 service and browser page are running, subsequent observed turns need no per-task
 UI command. Starting without `--open` observes quietly and never launches a
-browser in response to a task. Opening the page is not consent to enter its
-reading panel: use **进入等待空间** when you want to read.
+browser in response to a task. Opening the page directly shows Timeline/Discovery;
+there is no enter/hide gate. History still requires prior explicit local import
+consent, and disabling analysis replaces the content with a privacy empty state.
 
 ```sh
 python3 demo/app.py open       # Reopen, or reconnect after a service restart
@@ -188,12 +190,14 @@ encrypted; the same OS user can read it. Credential-pattern exclusion is
 best-effort, not a guarantee that all sensitive prose is detected. Keep it off
 shared screens and never publish the private data directory.
 
-Waiting never launches a browser, expands the reading panel, or steals focus.
-The panel starts collapsed. After five seconds of observed work, a non-modal
-corner invitation offers **进入等待空间** / **暂不进入**. Only an explicit entry
-click expands the content. Declining or closing suppresses invitations for the
-observed turns; the tab remembers offers across reloads (bounded to 200 turn keys
-in session storage). Concurrent turns share one invitation. Finished, stale or
+The waiting space is always visible in the page, including after a reload; the
+reading section has no enter/hide gate. Waiting never launches a browser, scrolls
+the page or steals focus. Foreground reading suppresses redundant invitations.
+After five seconds of work, a newly eligible background turn's optional invitation can
+offer **进入等待空间** / **暂不进入**. Its entry action scrolls to the existing
+reading section, not a hidden view. Declining suppresses that turn's invitation;
+the tab remembers offers across reloads (bounded to 200 turn keys in session
+storage). Concurrent turns share one invitation. Finished, stale or
 waiting-for-input turns no longer invite. Disable **等待邀请** to suppress future
 invitations; the existing `auto_show` setting is retained for compatibility, but
 now controls invitations, never automatic opens. The legacy `opened_turn` DB
@@ -202,8 +206,8 @@ column is preserved without further use; existing evidence is not migrated.
 Completion produces an in-page notice without changing the selected mode, scroll
 position, or focus. Optional browser notifications need the user's permission
 and a live browser page. Background waiting notifications are dismissible; only
-clicking a still-current invitation focuses the page and enters. Closing the
-browser page means no invitation delivery; frozen pages and OS/browser restrictions
+clicking a still-current invitation focuses the page and scrolls to reading.
+Closing the browser page means no invitation delivery; frozen pages and OS/browser restrictions
 can also delay or block delivery. No notification permission is requested
 automatically. An explicit CLI `open` / `--open` remains user-initiated. There is
 no percentage-progress estimate or native always-on-top window.

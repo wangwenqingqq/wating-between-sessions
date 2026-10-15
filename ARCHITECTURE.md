@@ -99,10 +99,12 @@ host-owned database. A Unix lock prevents duplicate services on one data store.
 
 At five elapsed seconds of non-stale WORKING, `panel_due` makes a turn eligible
 for an invitation, never an automatic open. The observer does not launch windows.
-The reading panel starts collapsed; only a user click enters. The page aggregates
-concurrent eligible turns into a non-modal corner invitation, with entry/decline
-buttons. Turn keys offered in this tab are deduplicated across reloads in bounded
-session storage; closing content also suppresses the currently observed turns.
+The reading section is always visible and loads on the first state response,
+subject to the existing history consent gate. No enter/hide control remains.
+Foreground reading suppresses invitations. In the background, the page aggregates
+concurrent eligible turns into a non-modal invitation with entry/decline buttons;
+entry scrolls to the existing reading section. Turn keys offered in this tab are
+deduplicated across reloads in bounded session storage.
 Disabling the legacy `auto_show` setting suppresses invitations across restarts.
 The legacy `opened_turn` column remains for schema compatibility, but the old
 transactional open-claim path is removed.

@@ -9,6 +9,7 @@ let offered = new Set();
 try { offered = new Set(JSON.parse(sessionStorage.getItem('awe-invited') || '[]')); } catch (_) { /* A damaged tab cache must not prevent entry. */ }
 let sessionsExpanded = false, sessionInventory = '';
 let chronicleData = null, selectedTopic = '', chronicleDomain = '', chronicleKind = '', contentRequest = 0;
+let discoveryFields = null, discoveryRequest = 0;
 const kinds = {request:'当时的请求', reported_result:'助手自报结果 · 未独立验证', decision:'用户明确选择', open_question:'当时尚未解决'};
 const categories = {research:'研究',engineering:'工程',learning:'学习',general:'日常'};
 const labels = {IDLE:'等待新任务',WORKING:'Agent 正在工作',WAITING_USER:'Agent 需要你的确认',COMPLETED:'本轮执行已结束',FAILED:'执行中断或失败'};
@@ -125,6 +126,7 @@ async function source(event, card=null) {
 }
 async function loadCards() {
   if(!state)return;
+  if(mode==='discovery')loadDiscoveryFields();
   const request=++contentRequest,requestedMode=mode;
   if(!state.history_enabled){
     markdownCache.clear();markdownObserver?.disconnect();
@@ -140,11 +142,11 @@ async function loadCards() {
       if(request!==contentRequest||mode!==requestedMode)return;
       chronicleData=data;renderChronicles(data);return;
     }
-    const params=new URLSearchParams({mode,month:$('month').value,topic:$('topic').value});
+    const params=new URLSearchParams({mode,topic:$('topic').value});
     const events=await api('events?'+params);
     if(request!==contentRequest||mode!==requestedMode)return;
     $('cards').replaceChildren();
-    if(!events.length){empty(mode==='discovery'?'还没有明确标记为未解决的问题。我们不会把普通提问推断成遗留问题。':'这个范围里还没有历史卡片。请在本机授权导入历史，或切换月份和主题。');return;}
+    if(!events.length){empty('还没有明确标记为未解决的问题。我们不会把普通提问推断成遗留问题。');return;}
     for(const event of events)$('cards').append(eventCard(event));
   }catch(error){if(request===contentRequest&&mode===requestedMode)showError(error.message);}
 }
@@ -280,13 +282,54 @@ async function poll() {
   }catch(error){showError(error.message+'。若服务重启，请运行 python3 demo/app.py open 重新连接。');}
   finally{loading=false;}
 }
-for(const button of document.querySelectorAll('.tab'))button.onclick=()=>{
-  mode=button.dataset.mode;
-  document.querySelectorAll('.tab').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',String(b===button));});
-  $('cards').hidden=mode!=='discovery';$('chronicles').hidden=mode!=='timeline';$('category-filter').hidden=mode!=='discovery';
-  $('content-hint').textContent=mode==='discovery'?'仅展示当时明确的未解决记录，当前是否解决仍需核实。':'以课题为卷，沿着原文回看。';
+function setReadingMode(next) {
+  mode=next;
+  document.querySelectorAll('.tab').forEach(b=>{const selected=b.dataset.mode===mode;b.classList.toggle('active',selected);b.setAttribute('aria-pressed',String(selected));});
+  $('discovery-view').hidden=mode!=='discovery';$('chronicles').hidden=mode!=='timeline';$('filters').hidden=mode!=='timeline';
   loadCards();
+}
+for(const button of document.querySelectorAll('.tab'))button.onclick=()=>setReadingMode(button.dataset.mode);
+function loadDiscoveryFields() {
+  if(!discoveryFields)discoveryFields=api('discovery/fields').then(fields=>{
+    const selected=$('discovery-field').value;
+    $('discovery-field').replaceChildren(...fields.map(f=>new Option(f.label,f.id)));
+    if(fields.some(f=>f.id===selected))$('discovery-field').value=selected;
+  }).catch(()=>{discoveryFields=null;$('discovery-status').textContent='领域列表暂不可用，可以稍后切换页面重试。';});
+}
+function discoveryLink(text,url) {
+  try{const parsed=new URL(url);if(parsed.protocol!=='https:'||parsed.username||parsed.password)return null;}catch(_){return null;}
+  const link=element('a',text);link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.referrerPolicy='no-referrer';return link;
+}
+function renderDiscovery(data) {
+  const root=$('discovery-results');root.replaceChildren();
+  const kind={paper:'论文',article:'文章',wechat:'公众号'}[data.kind];
+  $('discovery-status').textContent=(data.status==='unavailable'?'来源暂不可用或限流，请稍后重试，或前往原站检索。':data.items.length?`找到 ${data.items.length} 条${kind} · 近 ${data.days} 天，按来源日期倒序。`:'公开索引暂无符合时间范围的结果，不代表没有相关内容。')+` 来源：${data.source} · ${data.cached?'缓存获取于':'检索于'} ${new Date(data.fetched_at*1000).toLocaleString('zh-CN')}`+(data.omitted?` · ${data.omitted} 条日期缺失或超出范围，已略过。`:'');
+  if(data.kind==='wechat')root.append(element('p','仅收录索引明确标记为微信公众平台的条目；外站检索结果的日期仍需自行核实。','subtle'));
+  for(const item of data.items){
+    const link=discoveryLink(item.title+' ↗',item.url);if(!link)continue;
+    const card=element('article','','discovery-card'),heading=element('h3');heading.append(link);
+    card.append(element('p',`${kind} · ${item.source} · ${new Date(item.published).toLocaleDateString('zh-CN')} · ${item.date_label}`,'discovery-meta'),heading);
+    if(item.summary)card.append(element('p',item.summary,'discovery-summary'));
+    root.append(card);
+  }
+  const fallback=discoveryLink(data.kind==='wechat'?'去搜狗微信搜索（外站，日期自行核实） ↗':'去原站继续搜索 ↗',data.fallback);
+  if(fallback){fallback.className='discovery-external';root.append(fallback);}
+}
+function resetDiscoveryResults() {
+  discoveryRequest++;$('discovery-results').replaceChildren();
+  $('discovery-status').textContent='条件已更新。点击搜索后才会发送所选领域与关键词。';
+  $('discovery-submit').disabled=false;$('discovery-results').setAttribute('aria-busy','false');
+}
+$('discovery-form').onsubmit=async event=>{
+  event.preventDefault();const request=++discoveryRequest;
+  const body={field:$('discovery-field').value,kind:$('discovery-kind').value,days:Number($('discovery-days').value),keyword:$('discovery-keyword').value.trim(),consent:true};
+  $('discovery-submit').disabled=true;$('discovery-status').textContent='正在检索公开来源…';$('discovery-results').replaceChildren();$('discovery-results').setAttribute('aria-busy','true');
+  try{const data=await api('discovery/search',body);if(request===discoveryRequest)renderDiscovery(data);}
+  catch(error){if(request===discoveryRequest)$('discovery-status').textContent=error.message;}
+  finally{if(request===discoveryRequest){$('discovery-submit').disabled=false;$('discovery-results').setAttribute('aria-busy','false');}}
 };
+for(const id of ['discovery-field','discovery-kind','discovery-days'])$(id).onchange=resetDiscoveryResults;
+$('discovery-keyword').oninput=resetDiscoveryResults;
 $('month').onchange=loadCards;$('topic').onchange=loadCards;
 for(const [id,key]of[['auto-show','auto_show'],['history-enabled','history_enabled']])$(id).onchange=async()=>{
   try{await api('settings',{[key]:$(id).checked});inventory='';await poll();}catch(error){showError(error.message);}

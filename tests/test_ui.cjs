@@ -448,3 +448,60 @@ test('Saving fields continues directly to writing, and close during a request st
   assert.equal(nodes.get('bottle-inbox-tabs').hidden,true);
   assert.equal(nodes.get('bottle-message-consent').checked,false);
 });
+
+test('Discovery opens with local catalog only; external search is never automatic or history-dependent', async()=>{
+  const {nodes,context}=setup(),calls=[];
+  context.fetch=async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>bottleProfileFixture.fields};};
+  vm.runInContext("state={history_enabled:false};setReadingMode('discovery');",context);await flushUI();
+  assert.equal(nodes.get('discovery-view').hidden,false);assert.equal(nodes.get('filters').hidden,true);
+  assert.equal(calls.length,1);assert.equal(calls[0].url,'/api/discovery/fields');assert.equal(calls[0].options.method,'GET');
+  assert.match(nodes.get('cards').children[0].textContent,/历史分析已关闭/);
+  const html=fs.readFileSync(path.join(__dirname,'../demo/ui/web/index.html'),'utf8');
+  assert.match(html,/<details class="discovery-history"><summary>本机历史留白/);
+  assert.match(html,/点击搜索，仅将所选领域与关键词/);
+});
+
+const discoveryFixture={items:[{title:'Synthetic paper',url:'https://arxiv.org/abs/2610.00001',source:'arXiv · 预印本',published:'2026-10-14T00:00:00Z',date_label:'首次提交',summary:'Synthetic metadata only.'}],kind:'paper',field:'gpu',days:30,source:'arXiv',fetched_at:1,cached:false,status:'ok',omitted:0,fallback:'https://arxiv.org/search/'};
+function discoveryInputs(nodes){for(const[id,value]of[['discovery-field','gpu'],['discovery-kind','paper'],['discovery-days','30'],['discovery-keyword','CUDA']])nodes.get(id).value=value;}
+
+test('Discovery sends only explicitly selected public search inputs and preserves the visible reading view', async()=>{
+  const {nodes,context}=setup(),requests=[];discoveryInputs(nodes);
+  context.fetch=async(url,options)=>{requests.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>discoveryFixture};};
+  await nodes.get('discovery-form').onsubmit({preventDefault(){}});
+  assert.deepEqual(requests,[{url:'/api/discovery/search',body:{field:'gpu',kind:'paper',keyword:'CUDA',days:30,consent:true}}]);
+  assert.equal(nodes.get('panel').hidden,false);assert.equal(context.focusCalls,0);
+  assert.equal(nodes.get('discovery-submit').disabled,false);
+  assert.match(nodes.get('discovery-status').textContent,/找到 1 条论文/);
+  const link=nodes.get('discovery-results').children[0].children[1].children[0];
+  assert.equal(link.href,'https://arxiv.org/abs/2610.00001');assert.equal(link.rel,'noopener noreferrer');assert.equal(link.referrerPolicy,'no-referrer');
+});
+
+test('Changed Discovery inputs invalidate in-flight results instead of displaying them under the wrong field', async()=>{
+  const {nodes,context}=setup();discoveryInputs(nodes);let resolve;
+  context.fetch=()=>new Promise(r=>{resolve=r;});
+  const pending=nodes.get('discovery-form').onsubmit({preventDefault(){}});
+  nodes.get('discovery-field').value='ml';nodes.get('discovery-field').onchange();
+  resolve({ok:true,json:async()=>discoveryFixture});await pending;
+  assert.equal(nodes.get('discovery-results').children.length,0);
+  assert.match(nodes.get('discovery-status').textContent,/条件已更新/);
+  assert.equal(nodes.get('discovery-submit').disabled,false);
+});
+
+test('Discovery treats remote metadata as text, rejects unsafe links and labels source dates and cache time',()=>{
+  const {nodes,context}=setup();context.fixture={...discoveryFixture,cached:true,items:[{...discoveryFixture.items[0],title:'<img onerror=bad>',summary:'<script>private()</script>'},{...discoveryFixture.items[0],url:'javascript:bad'}]};
+  vm.runInContext('renderDiscovery(fixture);',context);
+  const cards=nodes.get('discovery-results').children.filter(c=>c.className==='discovery-card');assert.equal(cards.length,1);
+  assert.equal(cards[0].children[1].children[0].textContent,'<img onerror=bad> ↗');assert.equal(cards[0].innerHTML,undefined);
+  assert.equal(cards[0].children[2].textContent,'<script>private()</script>');
+  assert.match(nodes.get('discovery-status').textContent,/缓存获取于/);assert.match(cards[0].children[0].textContent,/首次提交/);
+});
+
+test('Empty WeChat index and provider failure remain honest and keep explicit external search links',()=>{
+  const {nodes,context}=setup();context.fixture={...discoveryFixture,items:[],kind:'wechat',status:'empty',source:'Google News 公开索引',fallback:'https://weixin.sogou.com/weixin?type=2&query=GPU'};
+  vm.runInContext('renderDiscovery(fixture);',context);
+  assert.match(nodes.get('discovery-status').textContent,/不代表没有相关内容/);
+  assert.equal(nodes.get('discovery-results').children.filter(c=>c.className==='discovery-card').length,0);
+  assert.match(nodes.get('discovery-results').children.at(-1).textContent,/搜狗微信搜索.*日期自行核实/);
+  context.fixture.status='unavailable';vm.runInContext('renderDiscovery(fixture);',context);
+  assert.match(nodes.get('discovery-status').textContent,/来源暂不可用或限流/);
+});

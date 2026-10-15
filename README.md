@@ -2,7 +2,8 @@
 
 A local waiting panel with an evidence-linked conversation timeline. No model
 API, third-party Python package, telemetry, or host source modification is needed.
-The interface is in Chinese; project documentation is in English.
+The interface is in Chinese; project documentation is in English. Discovery can
+optionally search public sources after an explicit click; private history stays local.
 
 **Implemented:** lifecycle state machine, always-visible waiting space,
 five-second optional background invitation, Timeline /
@@ -142,7 +143,12 @@ privacy/retraction semantics and the intentionally local-only acceptance boundar
 - Shelf previews and card titles show readable text rather than Markdown tokens.
   Formatting requests do not mark records read, reimport history or mutate the DB.
 - An assistant-reported result is not independent proof of task completion.
-- Discovery finds explicit historical unresolved/pending wording; it does not
+- Discovery searches recent arXiv papers and indexed articles/WeChat content by
+  explicitly selected field, keywords and date range. It shows source/date links,
+  not generated recommendations; missing WeChat results retain an external search
+  link rather than fabricated cards. See [DISCOVERY.md](DISCOVERY.md) for source
+  coverage, outbound-query consent, caching and failure semantics.
+- **本机历史留白** inside Discovery retains explicit historical unresolved/pending wording; it does not
   assert that the issue remains open today.
 - Each card has a session ID, source file, line number, and SHA-256 of that source
   record. “View source” checks the record and normalized excerpt again.

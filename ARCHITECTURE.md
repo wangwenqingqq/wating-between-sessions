@@ -117,6 +117,15 @@ does not focus or reopen anything. CLI `open` / `--open` is an explicit user act
 
 ## Recovery and compatibility
 
+Discovery's external search is separate from local history selection. Its local
+catalog GET performs no network access. Only a consented search POST reaches the
+fixed arXiv/Google News feed URLs, using public field queries and user keywords;
+the adapter never receives a Store. Metadata is size/date/URL bounded, cached
+only in memory, and rendered as text. A private cross-process arXiv timestamp
+lock enforces one request/connection per three seconds across local profiles.
+Provider redirects and arbitrary URL fetches are disabled. Source coverage and
+explicit WeChat fallback limits are documented in [DISCOVERY.md](DISCOVERY.md).
+
 The DB survives service restart. The rollout reader recovers the last lifecycle
 boundary before a 2 MiB tail for files modified within 24 hours, then processes at most 10,000 complete
 records per file/tick. It retains partial final JSONL lines until completed and

@@ -366,6 +366,21 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(self.request('/api/delete-history', data={'confirm': 'no'}).status, 400)
         self.assertEqual(self.request('/api/delete-history', data={'confirm': 'DELETE'}).status, 200)
 
+    def test_discovery_auth_explicit_submission_and_no_history_dependency(self):
+        body = dict(field='gpu', kind='paper', keyword='CUDA', days=30, consent=True)
+        with patch('core.discovery.fetch_feed') as fetch:
+            self.assertEqual(self.request('/api/discovery/fields', auth=False).status, 401)
+            self.assertEqual(self.request('/api/discovery/fields').status, 200)
+            self.assertEqual(self.request('/api/discovery/search', data=body, auth=False).status, 401)
+            self.assertEqual(self.request('/api/discovery/search', data=body, Origin='https://evil.invalid').status, 403)
+            self.assertEqual(self.request('/api/discovery/search', data=dict(body, consent=False)).status, 400)
+            self.assertEqual(self.request('/api/discovery/search', data=dict(body, source_path='private')).status, 400)
+            fetch.assert_not_called()
+        with patch.object(self.server.discovery, 'search', return_value={'status': 'empty', 'items': []}) as search:
+            self.assertFalse(self.store.get('history_enabled', False))
+            self.assertEqual(self.request('/api/discovery/search', data=body).status, 200)
+            search.assert_called_once_with(body)
+
     def test_source_markdown_requires_consent_and_does_not_mark_read(self):
         path = self.root / 'markdown/session.jsonl'
         path.parent.mkdir()

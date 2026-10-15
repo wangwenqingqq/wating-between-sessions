@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="/style.css"><script defer src="/vendor/markdown-it.min.js"></script><script defer src="/markdown.js"></script><script defer src="/app.js"></script><script defer src="/bottles.js"></script>
 </head>
 <body>
-  <header><a class="brand" href="/">between<span>等候之间</span></a><div class="local"><i></i> 只在你的电脑上</div><button id="settings-open" class="quiet">隐私与设置</button></header>
+  <header><a class="brand" href="/">between<span>等候之间</span></a><div class="local"><i></i> 历史留在本机</div><button id="settings-open" class="quiet">隐私与设置</button></header>
   <main>
     <section class="intro"><div class="intro-copy"><p class="eyebrow">A LITTLE SPACE BETWEEN TASKS</p><h1>让等待，成为一次回望。</h1><p class="subtle">Agent 继续工作。你可以在这里，拾起曾经的想法。</p><div class="bottle-entry"><span class="bottle-mark" role="img" aria-label="科研漂流瓶" title="科研漂流瓶"><svg viewBox="0 0 28 36" width="28" height="36" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3h8v4h-8zM11 7v7l-5 6v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V20l-5-6V7"/><path d="M8 25c4-3 8 3 12 0M11 20l5-2 2 7-5 2z"/></svg></span><button id="bottle-open" class="bottle-primary" aria-expanded="false" aria-controls="bottle-panel">投递</button><button id="bottle-receive" class="bottle-primary" aria-expanded="false" aria-controls="bottle-panel">收回</button></div></div><div class="orbit" aria-hidden="true"><div></div><span>一段思考<br>正在继续</span></div></section>
     <section id="bottle-panel" class="bottle-panel" aria-labelledby="bottle-heading" hidden>
@@ -35,8 +35,22 @@
     <aside id="wait-invitation" class="wait-invitation" aria-label="等待空间邀请" hidden><p class="eyebrow">A MOMENT FOR YOURSELF</p><strong>等候之间，随你选择。</strong><p id="wait-invitation-text" role="status"></p><p class="subtle">不打断、不自动进入。暂不进入后，本轮不再提醒。</p><div class="invitation-actions"><button id="wait-enter" class="invitation-enter">进入等待空间</button><button id="wait-dismiss" class="quiet">暂不进入</button></div></aside>
     <section id="panel">
       <div class="content-header"><nav aria-label="内容模式"><button class="tab active" data-mode="timeline" aria-pressed="true">Timeline <span>编年史</span></button><button class="tab" data-mode="discovery" aria-pressed="false">Discovery <span>再发现</span></button></nav><span id="inventory" class="subtle"></span></div>
-      <div class="filters" id="filters"><label>月份 <select id="month"><option value="">全部月份</option></select></label><label id="category-filter" hidden>主题 <select id="topic"><option value="">全部主题</option><option value="research">研究</option><option value="engineering">工程</option><option value="learning">学习</option><option value="general">日常</option></select></label><span id="content-hint">以课题为卷，沿着原文回看。</span></div>
-      <section id="chronicles" aria-label="专题列传" aria-live="polite"></section><div id="cards" class="cards" aria-live="polite" hidden></div>
+      <div class="filters" id="filters"><label>月份 <select id="month"><option value="">全部月份</option></select></label><span id="content-hint">以课题为卷，沿着原文回看。</span></div>
+      <section id="chronicles" aria-label="专题列传" aria-live="polite"></section>
+      <section id="discovery-view" aria-label="领域新知" hidden>
+        <div class="discovery-heading"><h2>领域新知</h2><p class="subtle">走出旧的提问，看看这个领域最近发生了什么。</p></div>
+        <form id="discovery-form" class="discovery-form">
+          <label>领域 <select id="discovery-field"><option value="ml">机器学习</option></select></label>
+          <label>内容 <select id="discovery-kind"><option value="paper">论文 · arXiv</option><option value="article">文章 · 公开资讯</option><option value="wechat">公众号 · 公开索引</option></select></label>
+          <label>范围 <select id="discovery-days"><option value="7">近 7 天</option><option value="30" selected>近 30 天</option><option value="90">近 90 天</option></select></label>
+          <label class="discovery-keyword">关键词 <input id="discovery-keyword" type="search" maxlength="80" placeholder="可选，如 CUDA、temporal graph；论文建议英文"></label>
+          <button id="discovery-submit" class="outlined" type="submit">搜索</button>
+        </form>
+        <p class="discovery-privacy">点击搜索，仅将所选领域与关键词发送给 arXiv 或 Google News，搜索不读取或上传对话。公众号索引可能缺失，保留微信外站搜索入口。</p>
+        <p id="discovery-status" class="subtle" role="status">选择领域后搜索，不自动联网。结果只展示来源元数据，不生成推荐故事。</p>
+        <div id="discovery-results" class="discovery-results" aria-live="polite"></div>
+        <details class="discovery-history"><summary>本机历史留白</summary><p class="subtle">以下是当时明确的未解决记录，不是最新外部内容，当前是否解决仍需核实。</p><div class="filters"><label>主题 <select id="topic"><option value="">全部主题</option><option value="research">研究</option><option value="engineering">工程</option><option value="learning">学习</option><option value="general">日常</option></select></label></div><div id="cards" class="cards"></div></details>
+      </section>
     </section>
     <footer><span>LOCAL FIRST · NO MODEL API · NO ANALYTICS</span><span>完成时轻声提醒，不打断你正在读的内容。</span></footer>
   </main>

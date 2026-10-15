@@ -1,5 +1,29 @@
 # Validation and evidence ledger
 
+## Recent public-topic Discovery — 2026-10-15
+
+Discovery now separates explicit external field/keyword searches from the folded
+local historical unresolved records. The revision passes 64 Python and 34 Node
+tests. New gates cover explicit consent and exact payload shape, no automatic
+outbound search, fixed providers/no redirects, XML/response bounds, source/URL
+checks, dates and UTC sorting, cross-profile rate limiting, original cache time,
+unsafe metadata as text, stale-input response rejection and honest empty/failure
+states. History-disabled profiles can search public topics without exposing
+private records or enabling history analysis.
+
+One live same-machine GPU/30-day query returned 12 arXiv papers and six indexed
+articles. The WeChat-restricted public index returned zero; ordinary non-WeChat
+web results were not substituted. Sogou's broad public search also showed older
+results in a separate probe, so it is an external fallback with unverified dates,
+not claimed as a current-article feed. No source article full text was fetched.
+These counts are a dated connectivity smoke check, not a relevance/coverage score.
+After a companion restart, a later paper query hit the 12-second socket timeout;
+the UI correctly showed an unavailable source and a manual arXiv search link,
+not fabricated results. Live provider availability is not an acceptance/SLA claim.
+The live browser displayed these three result states, retained 42 local historical
+cards under their disclosure, and showed no horizontal overflow at 1,280px and
+390px. The normal default-visible waiting space and compact bottle entry remain.
+
 ## Always-visible waiting space — 2026-10-15
 
 This revision supersedes the collapsed reading-panel contract in the historical

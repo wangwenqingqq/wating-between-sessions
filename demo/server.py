@@ -15,6 +15,7 @@ from core.chronicles import load_chronicles
 from core.history_parser import select_content, inspect_evidence
 from core.state_manager import StateManager
 from core.bottles import BottleBoard, BottleError
+from core.discovery import DiscoverySearch, FIELDS
 
 
 WEB = Path(__file__).parent / 'ui/web'
@@ -26,6 +27,7 @@ class Server(ThreadingHTTPServer):
     def __init__(self, store, port=8765, watch_root=None, bottle_root=None):
         self.store, self.manager = store, StateManager(store)
         self.bottles = BottleBoard(store, bottle_root)
+        self.discovery = DiscoverySearch()
         self.token = secrets.token_urlsafe(32)
         self.observation_started = time.time()
         self.watcher = CodexWatcher(self.manager, watch_root) if watch_root else None
@@ -84,6 +86,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, (WEB / name).read_bytes(), content_type)
         if url.path == '/health':
             return self.reply(200, {'ok': True, 'app': 'agent-waiting-experience'})
+        if url.path == '/api/discovery/fields':
+            return self.reply(200, [dict(id=k, label=v) for k, v in FIELDS.items()])
         if url.path == '/api/bottles/status':
             try:
                 return self.reply(200, self.server.bottles.status())
@@ -137,6 +141,11 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, TypeError):
             return self.reply(400, {'error': 'Invalid JSON'})
         store = self.server.store
+        if self.path == '/api/discovery/search':
+            try:
+                return self.reply(200, self.server.discovery.search(body))
+            except ValueError as exc:
+                return self.reply(400, {'error': str(exc)})
         if self.path.startswith('/api/bottles/'):
             try:
                 return self.reply(200, self.server.bottles.command(self.path.removeprefix('/api/bottles/'), body))

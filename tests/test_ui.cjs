@@ -6,7 +6,7 @@ const test = require('node:test');
 
 function setup(storage=new Map()) {
   const nodes = new Map();
-  const element = (tag='div') => ({tagName:tag.toUpperCase(),children: [],
+  const element = (tag='div') => ({tagName:tag.toUpperCase(),children: [],dataset:{},querySelectorAll:()=>[],
     append(...items) { this.children.push(...items); }, replaceChildren() { this.children = []; },
     setAttribute(key,value) { this[key]=value; },scrollIntoView() {},showModal() {}});
   const document = {
@@ -23,15 +23,16 @@ function setup(storage=new Map()) {
   };
   document.visibilityState='visible';
   document.activeElement={id:'existing-focus'};
-  const context = vm.createContext({document, URL, atob, location: {hash: ''},
+  const context = vm.createContext({document, URL, atob,crypto:require('node:crypto'), location: {hash: ''},
     sessionStorage: {getItem:key=>storage.get(key)||'',setItem:(key,value)=>storage.set(key,value)},
     Option:function(text,value){return {textContent:text,value};},focusCalls:0,
     focus(){this.focusCalls++;},open(){throw new Error('Unsolicited window open');},
     fetch: () => new Promise(() => {}), setInterval() {}});
   context.window=context;
-  for(const file of ['vendor/markdown-it.min.js','markdown.js','app.js'])vm.runInContext(fs.readFileSync(path.join(__dirname, '../demo/ui/web',file), 'utf8'), context);
+  for(const file of ['vendor/markdown-it.min.js','markdown.js','app.js','bottles.js'])vm.runInContext(fs.readFileSync(path.join(__dirname, '../demo/ui/web',file), 'utf8'), context);
   document.getElementById('panel').hidden=true;
   document.getElementById('wait-invitation').hidden=true;
+  document.getElementById('bottle-panel').hidden=true;
   return {nodes,context};
 }
 
@@ -297,4 +298,82 @@ test('Rendering never guesses list or table boundaries in flattened saved text',
   assert.doesNotMatch(html,/<ul>|<ol>|<table>/);
   assert.match(html,/7 - 3 \+ 2 = 6/);assert.match(html,/余额变动 - 5 元/);
   assert.match(html,/\| A \| \| B \|/);
+});
+
+const bottleProfileFixture={joined:false,interests:[],scope:'local',fields:[{id:'gpu',label:'GPU 与体系结构'},{id:'ml',label:'机器学习'}]};
+const flushUI=()=>new Promise(setImmediate);
+function bottleFetch(context,callback){context.fetch=async(url,options)=>{const data=await callback(url,options.body?JSON.parse(options.body):null);return {ok:true,json:async()=>data};};}
+
+test('Bottle entry sits in the requested intro, starts collapsed and never uploads on load', async()=>{
+  const {nodes,context}=setup();let requests=0;
+  bottleFetch(context,()=>{requests++;return bottleProfileFixture;});
+  await flushUI();assert.equal(requests,0);
+  const html=fs.readFileSync(path.join(__dirname,'../demo/ui/web/index.html'),'utf8');
+  assert.ok(html.indexOf('id="bottle-open"')<html.indexOf('id="status-title"'));
+  assert.match(html,/<section id="bottle-panel"[^>]* hidden>/);
+  nodes.get('bottle-open').onclick();await flushUI();
+  assert.equal(requests,1);assert.equal(nodes.get('bottle-panel').hidden,false);
+  assert.equal(nodes.get('panel').hidden,true);assert.equal(nodes.get('bottle-workbench').hidden,true);
+  assert.equal(nodes.get('bottle-interest-consent').checked,false);
+  nodes.get('bottle-close').onclick();assert.equal(nodes.get('bottle-panel').hidden,true);
+});
+
+test('Selecting interests stays local until explicit consented submit', async()=>{
+  const {nodes,context}=setup(),requests=[];
+  bottleFetch(context,(url,data)=>{requests.push({url,data});return url.endsWith('/profile')?{...bottleProfileFixture,joined:true,interests:data.interests}:bottleProfileFixture;});
+  nodes.get('bottle-open').onclick();await flushUI();
+  const check=nodes.get('bottle-fields').children[0].children[0];check.checked=true;check.onchange();
+  assert.equal(requests.length,1);
+  nodes.get('bottle-profile-form').onsubmit({preventDefault(){}});await flushUI();
+  assert.equal(requests.length,1);assert.match(nodes.get('bottle-status').textContent,/明确同意/);
+  nodes.get('bottle-interest-consent').checked=true;
+  nodes.get('bottle-profile-form').onsubmit({preventDefault(){}});await flushUI();
+  assert.deepEqual(requests[1],{url:'/api/bottles/profile',data:{interests:['gpu'],consent:true}});
+  assert.equal(nodes.get('bottle-workbench').hidden,false);
+  assert.equal(nodes.get('bottle-interest-consent').checked,false);
+});
+
+test('Bottles show honest empty state and safe Markdown replies without identity fields', async()=>{
+  const {nodes,context}=setup();let picked=false;
+  const bottle={id:'00000000-0000-4000-8000-000000000001',field:'gpu',body:'## Synthetic concern\n\n- **test only**\n\n<img src=x onerror=bad>',created:1,mine:false,replies:[{id:'r',body:'> A supportive *reply*',created:2,mine:false,from_author:false}]};
+  bottleFetch(context,url=>url.endsWith('/status')?{...bottleProfileFixture,joined:true,interests:['gpu']}:{bottle:picked?bottle:null});
+  nodes.get('bottle-open').onclick();await flushUI();nodes.get('bottle-field').value='gpu';
+  nodes.get('bottle-pick').onclick();await flushUI();
+  assert.match(nodes.get('bottle-status').textContent,/没有假用户/);assert.equal(nodes.get('bottle-detail').hidden,true);
+  picked=true;nodes.get('bottle-pick').onclick();await flushUI();
+  assert.match(nodes.get('bottle-note').innerHTML,/<h2>Synthetic concern<\/h2>/);
+  assert.match(nodes.get('bottle-note').innerHTML,/<strong>test only<\/strong>/);
+  assert.doesNotMatch(nodes.get('bottle-note').innerHTML,/<img/);
+  assert.match(nodes.get('bottle-replies').children[0].children[1].innerHTML,/<blockquote>/);
+  assert.equal(nodes.get('bottle-delete').hidden,true);assert.equal(nodes.get('panel').hidden,true);
+});
+
+test('Failed bottle submission preserves draft and retry nonce, never attaches conversations', async()=>{
+  const {nodes,context}=setup(),posts=[];let first=true;
+  const bottle={id:'00000000-0000-4000-8000-000000000001',field:'gpu',body:'Synthetic draft',created:1,mine:true,replies:[]};
+  context.fetch=async(url,options)=>{
+    const data=options.body?JSON.parse(options.body):null;
+    if(url.endsWith('/throw')){posts.push(data);if(first){first=false;return {ok:false,json:async()=>({error:'Synthetic transport error'})};}}
+    return {ok:true,json:async()=>url.endsWith('/status')?{...bottleProfileFixture,joined:true,interests:['gpu']}:url.endsWith('/mine')?{bottles:[{...bottle,reply_count:0}],replies:[]}:{bottle}};
+  };
+  nodes.get('bottle-open').onclick();await flushUI();nodes.get('bottle-field').value='gpu';
+  nodes.get('bottle-nav-write').onclick();nodes.get('bottle-message').value='Synthetic draft';
+  nodes.get('bottle-write-view').onsubmit({preventDefault(){}});await flushUI();assert.equal(posts.length,0);
+  nodes.get('bottle-message-consent').checked=true;
+  nodes.get('bottle-write-view').onsubmit({preventDefault(){}});await flushUI();
+  assert.equal(nodes.get('bottle-message').value,'Synthetic draft');
+  nodes.get('bottle-write-view').onsubmit({preventDefault(){}});await flushUI();
+  assert.equal(posts.length,2);assert.equal(posts[0].request_id,posts[1].request_id);
+  assert.deepEqual(Object.keys(posts[0]).sort(),['body','consent','field','request_id']);
+  assert.equal(nodes.get('bottle-message').value,'');assert.equal(nodes.get('bottle-message-consent').checked,false);
+  assert.equal(nodes.get('bottle-detail').hidden,false);assert.equal(nodes.get('panel').hidden,true);
+});
+
+test('My replies remain reachable after reload, and reading bottles suppresses redundant waiting invitations', async()=>{
+  const {nodes,context}=setup();
+  bottleFetch(context,url=>url.endsWith('/status')?{...bottleProfileFixture,joined:true,interests:['gpu']}:{bottles:[],replies:[{id:'r',bottle_id:'b',field:'gpu',body:'A synthetic reply',created:1}]});
+  nodes.get('bottle-open').onclick();await flushUI();nodes.get('bottle-nav-mine').onclick();await flushUI();
+  assert.equal(nodes.get('bottle-mine-view').children.filter(e=>e.className==='bottle-mine-card').length,1);
+  waiting(context);assert.equal(nodes.get('wait-invitation').hidden,true);
+  nodes.get('bottle-close').onclick();waiting(context);assert.equal(nodes.get('wait-invitation').hidden,true);
 });

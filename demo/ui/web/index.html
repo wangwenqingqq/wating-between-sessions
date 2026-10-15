@@ -3,12 +3,33 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Between · Agent 等待空间</title>
-  <link rel="stylesheet" href="/style.css"><script defer src="/vendor/markdown-it.min.js"></script><script defer src="/markdown.js"></script><script defer src="/app.js"></script>
+  <link rel="stylesheet" href="/style.css"><script defer src="/vendor/markdown-it.min.js"></script><script defer src="/markdown.js"></script><script defer src="/app.js"></script><script defer src="/bottles.js"></script>
 </head>
 <body>
   <header><a class="brand" href="/">between<span>等候之间</span></a><div class="local"><i></i> 只在你的电脑上</div><button id="settings-open" class="quiet">隐私与设置</button></header>
   <main>
-    <section class="intro"><div><p class="eyebrow">A LITTLE SPACE BETWEEN TASKS</p><h1>让等待，成为一次回望。</h1><p class="subtle">Agent 继续工作。你可以在这里，拾起曾经的想法。</p></div><div class="orbit" aria-hidden="true"><div></div><span>一段思考<br>正在继续</span></div></section>
+    <section class="intro"><div class="intro-copy"><p class="eyebrow">A LITTLE SPACE BETWEEN TASKS</p><h1>让等待，成为一次相遇。</h1><p class="subtle">把科研烦恼写进漂流瓶，也许同领域的人，正好懂你。</p><div class="bottle-entry"><button id="bottle-open" class="bottle-primary" aria-expanded="false" aria-controls="bottle-panel">科研漂流瓶 <span aria-hidden="true">↗</span></button><span>自愿选择领域 · 不读取对话 · 仅本机试用</span></div></div><div class="orbit" aria-hidden="true"><div></div><span>一封心事<br>漂向同路人</span></div></section>
+    <section id="bottle-panel" class="bottle-panel" aria-labelledby="bottle-heading" hidden>
+      <div class="bottle-head"><div><p class="eyebrow">RESEARCH DRIFT BOTTLES</p><h2 id="bottle-heading">科研漂流瓶</h2></div><button id="bottle-close" class="quiet">收起漂流瓶</button></div>
+      <p class="bottle-scope">本机双用户联调 · 尚未对外上线。不预置假用户，也不保证每只瓶子都能收到回声。</p>
+      <p class="bottle-privacy">只共享你主动选择的领域和提交的文字，不上传会话、编年史或推理内容。对其他参与者不展示身份，但本机数据池不是加密或强匿名系统；请勿填写姓名、联系方式、凭据及未公开的论文或实验数据。撤回后仅保留无正文的防重请求哈希，避免旧请求重新发布。</p>
+      <p id="bottle-status" class="bottle-status" role="status"></p>
+      <form id="bottle-profile-form">
+        <fieldset><legend>愿意共享哪些感兴趣的领域？<span>最多 5 个</span></legend><div id="bottle-fields" class="bottle-fields"></div></fieldset>
+        <p class="subtle">只有点击下方按钮才会提交。移除一个领域，会同时撤回你在该领域投递的瓶子和留下的回声。</p>
+        <label class="bottle-consent"><input id="bottle-interest-consent" type="checkbox" required>我自愿将所选领域共享到本机漂流瓶数据池。</label>
+        <div class="bottle-form-actions"><button type="submit" class="bottle-primary">共享所选领域，开启漂流瓶</button><button type="button" id="bottle-profile-cancel" class="quiet" hidden>取消更改</button></div>
+      </form>
+      <div id="bottle-workbench" hidden>
+        <div class="bottle-membership"><p id="bottle-membership"></p><div><button id="bottle-manage" class="quiet">管理领域</button><button id="bottle-withdraw" class="quiet">退出并撤回全部内容</button></div></div>
+        <nav class="bottle-tabs" aria-label="漂流瓶模式"><button id="bottle-nav-pick" aria-pressed="true">捞一只瓶子</button><button id="bottle-nav-write" aria-pressed="false">写一只瓶子</button><button id="bottle-nav-mine" aria-pressed="false">我的瓶子与回声</button></nav>
+        <label id="bottle-field-label" class="bottle-field-label">同领域的海 <select id="bottle-field"></select></label>
+        <div id="bottle-pick-view"><p class="subtle">捞取你共享领域中的其他参与者的瓶子。没有瓶子时，就让海面暂时留白。</p><button id="bottle-pick" class="bottle-primary">捞一只同领域的瓶子</button></div>
+        <form id="bottle-write-view" hidden><label class="bottle-editor">此刻，什么科研烦恼想说给同路人听？<textarea id="bottle-message" maxlength="2000" rows="5" required placeholder="可以是反复不降的 loss，也可以是一个迟迟想不通的问题。支持 Markdown；请不要贴入未公开成果或原始对话。"></textarea></label><label class="bottle-consent"><input id="bottle-message-consent" type="checkbox" required>我同意将这段文字共享给同领域的本机参与者。</label><div class="bottle-form-actions"><button type="submit" class="bottle-primary">投向同领域的海</button><span>最多 2000 字 · 不附带身份或对话记录</span></div></form>
+        <div id="bottle-mine-view" class="bottle-mine" hidden></div>
+        <article id="bottle-detail" class="bottle-detail" hidden><div class="bottle-note-head"><span id="bottle-note-meta"></span><button id="bottle-delete" class="quiet" hidden>撤回这只瓶子</button></div><div id="bottle-note" class="markdown"></div><h3>来自同路人的回声</h3><div id="bottle-replies"></div><form id="bottle-reply-form"><label class="bottle-editor">留下一点共鸣，或一个具体建议<textarea id="bottle-reply" maxlength="800" rows="3" required placeholder="友善回应，不做成果比较，也不索取隐私。支持 Markdown，最多 800 字。"></textarea></label><label class="bottle-consent"><input id="bottle-reply-consent" type="checkbox" required>我同意将这段回声共享给这一领域的本机参与者。</label><button type="submit" class="bottle-primary">把回声装进瓶子</button></form></article>
+      </div>
+    </section>
     <section class="status-strip" aria-live="polite"><div class="status-dot" id="status-dot"></div><div class="status-copy"><strong id="status-title">连接本地服务…</strong><span id="status-detail">不会读取推理内容，也不会代你授权。</span></div><span id="elapsed">—</span><div class="status-actions"><button class="quiet" id="session-toggle" aria-expanded="false" aria-controls="session-list">展开会话 ▾</button><button class="quiet" id="panel-close" hidden>收起内容</button></div></section>
     <section id="session-list" class="session-list" aria-label="Agent 会话" hidden></section>
     <div id="notice" class="notice" role="status" hidden><span id="notice-text"></span><button id="notice-dismiss" class="quiet">知道了</button></div>

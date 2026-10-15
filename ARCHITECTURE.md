@@ -27,12 +27,23 @@ Explicit local import ─ Parser / extractor ─ Timeline ─ filtered cards
 | `core/codex_watcher.py` | Read-only bounded JSONL tail; explicit experimental compatibility |
 | `core/history_parser.py` | Parse, exclude instructions/secret patterns, extract, deduplicate, filter, verify |
 | `core/chronicles.py` | Read-only topic classification, deduplicated inventory, sourced chapters and full chronology |
+| `core/bottles.py` | Opt-in local shared pool, same-field policy, private per-instance identity, author retraction and replay receipts |
 | `core/store.py` | Private SQLite schema, settings, derived-history deletion |
 | `demo/server.py` | Loopback API, authentication, safe static allowlist, passive observer worker |
 | `demo/ui/web/` | Framework-free accessible tabs, filters, evidence dialog, controls |
 | `experiments/` | Synthetic regression / private evidence audit utilities |
 
 Paths in this table are repository-relative for documentation only.
+
+The intro's bottle panel is independent from the reading panel. Each companion
+keeps its own random bottle identity in its private settings and uses a separate
+same-machine pool, never the history tables. The existing authenticated API
+exposes only explicit bottle operations; it never accepts a caller-supplied owner
+or sends conversation material. SQL projections omit peer identities. Field
+membership is rechecked on each read/write; SQLite write transactions serialize
+cross-instance changes and cascading retractions. Non-content consumption hashes
+prevent stale requests from resurrecting withdrawn posts/replies. See
+[BOTTLES.md](BOTTLES.md) for the local-only contract and production exclusions.
 
 `markdown.js` configures the vendored markdown-it browser bundle with raw HTML
 disabled, no image fetches, and an explicit link-scheme allowlist. Only this

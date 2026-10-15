@@ -23,7 +23,7 @@ const markdownObserver=typeof IntersectionObserver==='undefined'?null:new Inters
 
 async function api(path, data) {
   const response = await fetch('/api/' + path, {headers:{Authorization:'Bearer '+token, ...(data ? {'Content-Type':'application/json'} : {})}, method:data ? 'POST' : 'GET', body:data ? JSON.stringify(data) : undefined});
-  if (!response.ok) { const body = await response.json(); throw new Error(body.error || '本地服务不可用'); }
+  if (!response.ok) { const body = await response.json(); const error=new Error(body.error || '本地服务不可用');error.status=response.status;throw error; }
   return response.json();
 }
 function element(tag, text, cls='') { const e=document.createElement(tag); e.textContent=text; if(cls)e.className=cls; return e; }
@@ -70,7 +70,7 @@ function openPanel() {
 }
 function updateInvitation() {
   const eligible=state?.auto_show?state.sessions.filter(s=>s.panel_due):[];
-  if(!panelClosed){rememberOffers(eligible);hideInvitation();return;}
+  if(!panelClosed||$('bottle-panel')?.hidden===false){rememberOffers(eligible);hideInvitation();return;}
   invitationTurns=invitationTurns.filter(key=>eligible.some(s=>turnKey(s)===key));
   if(!invitationTurns.length)hideInvitation();
   const fresh=eligible.filter(s=>!offered.has(turnKey(s)));

@@ -40,6 +40,30 @@ OS screenshot or a reliability/SLA result. No real session state or timeline
 content was changed. Native waiting-invitation delivery/click navigation and
 closed/frozen-page delivery were not tested by this three-second completion check.
 
+## Local drift-bottle revision — 2026-10-15
+
+The explicitly selected scope is a same-machine two-profile pilot, not a public
+community. The revision passes 53 Python and 25 Node tests. New coverage includes
+consent at each sharing boundary, two authenticated HTTP clients sharing a pool,
+same-field access, owner-only retraction, field/profile cascades, duplicate and
+withdrawn-request replay, atomic receipt migration and failure recovery, private
+file modes, concurrent peers,
+input/body bounds, honest empty states, Markdown safety and preserved drafts.
+
+Browser QA used two separate private companion data directories/access keys and
+one isolated synthetic pool. A explicitly joined GPU/architecture and posted a
+labeled test bottle; B joined the same field, picked that bottle and replied;
+A refreshed its own bottle and read the exact reply. Headings, bullet/numbered
+lists and emphasis rendered as Markdown. The normal reading panel stayed hidden,
+and the real user's profile was not enrolled or assigned inferred interests.
+Both 1,280px and 390px layouts showed no horizontal overflow. The two test
+companions were stopped and all synthetic profiles/notes/replies were withdrawn
+from their isolated pool; only the two non-content replay-prevention hashes
+remain. The real timeline's 223 records, including read markers, matched its
+pre-change canonical SHA-256 checkpoint exactly. No real user story or
+conversation was posted. Public deployment, cross-device
+accounts, adversarial abuse prevention and community/user-value claims are absent.
+
 ## Original implementation record — 2026-10-14
 
 ## Contract

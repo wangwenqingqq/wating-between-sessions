@@ -7,6 +7,9 @@ The interface is in Chinese; project documentation is in English.
 **Implemented:** lifecycle state machine, five-second optional waiting invitation, Timeline /
 Discovery, collapsible live sessions, non-interrupting completion notices, per-session isolation,
 local import/deduplication, source-record verification, and privacy controls.
+The intro also has an opt-in **research drift-bottle exchange** for two local
+profiles: shared fields, same-field notes/replies, author-only retraction and no
+automatic history sharing. This pilot is not publicly deployed.
 **Not yet accepted:** 30 real host-task accuracy trials, a human semantic audit of
 50 events, live Claude Code execution, and the user study. Synthetic tests do not
 replace these gates.
@@ -95,6 +98,16 @@ Official Codex lifecycle hooks require review/trust, as documented in
 [plugin packaging](https://developers.openai.com/plugins/build/plugins). This
 MVP does not manipulate that trust state or claim to install such hooks.
 
+## Research drift bottles
+
+Use **科研漂流瓶** in the intro area. Choosing fields does not submit them;
+explicit consent and the share button are required. Bottles and replies have
+separate consent checks. The matching-field pool is genuinely shared by separate
+local companion profiles, but is empty until somebody explicitly posts. No fake
+users or seeded personal stories are supplied. The usual reading panel remains
+available without joining. See [BOTTLES.md](BOTTLES.md) for the two-profile launch,
+privacy/retraction semantics and the intentionally local-only acceptance boundary.
+
 ## What the timeline means
 
 - Timeline opens a thematic shelf: research/experiments, embodied/sensing,
@@ -155,6 +168,14 @@ manifest in `demo/ui/web/vendor/README.md`. Formatting caches stay in page memor
 and are cleared when history is disabled; disconnected/disabled views ignore
 in-flight formatting responses.
 The bootstrap key is a URL fragment, not an HTTP query or server access log.
+
+Opt-in bottles use a separate private same-machine database, not the conversation
+timeline. Only selected fields and manually consented editor text enter that
+pool; no HTTP upload leaves the machine. Peer identities are not displayed, but
+the OS account/operator can inspect the unencrypted pool. Retracting content
+preserves only request-consumption hashes to prevent delayed replay. History
+deletion and bottle withdrawal are separate controls; neither recalls screenshots,
+already delivered pages or backups. Do not expose either loopback instance.
 
 History import requires `--consent` for a selected root. The UI can disable
 history display/analysis without deleting the originals. Deletion removes the

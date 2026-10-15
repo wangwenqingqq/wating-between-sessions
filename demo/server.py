@@ -2,6 +2,7 @@ import hmac
 import json
 import secrets
 import signal
+import sqlite3
 import threading
 import time
 import webbrowser
@@ -13,6 +14,7 @@ from core.codex_watcher import CodexWatcher
 from core.chronicles import load_chronicles
 from core.history_parser import select_content, inspect_evidence
 from core.state_manager import StateManager
+from core.bottles import BottleBoard, BottleError
 
 
 WEB = Path(__file__).parent / 'ui/web'
@@ -21,8 +23,9 @@ WEB = Path(__file__).parent / 'ui/web'
 class Server(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, store, port=8765, watch_root=None):
+    def __init__(self, store, port=8765, watch_root=None, bottle_root=None):
         self.store, self.manager = store, StateManager(store)
+        self.bottles = BottleBoard(store, bottle_root)
         self.token = secrets.token_urlsafe(32)
         self.observation_started = time.time()
         self.watcher = CodexWatcher(self.manager, watch_root) if watch_root else None
@@ -75,12 +78,19 @@ class Handler(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         if not self.allowed(auth=url.path.startswith('/api/')):
             return
-        if url.path in {'/', '/app.js', '/style.css', '/markdown.js', '/vendor/markdown-it.min.js'}:
+        if url.path in {'/', '/app.js', '/bottles.js', '/style.css', '/markdown.js', '/vendor/markdown-it.min.js'}:
             name = 'index.html' if url.path == '/' else url.path[1:]
             content_type = 'text/html; charset=utf-8' if url.path == '/' else ('text/css; charset=utf-8' if url.path == '/style.css' else 'text/javascript; charset=utf-8')
             return self.reply(200, (WEB / name).read_bytes(), content_type)
         if url.path == '/health':
             return self.reply(200, {'ok': True, 'app': 'agent-waiting-experience'})
+        if url.path == '/api/bottles/status':
+            try:
+                return self.reply(200, self.server.bottles.status())
+            except BottleError as exc:
+                return self.reply(exc.status, {'error': str(exc)})
+            except (OSError, sqlite3.Error):
+                return self.reply(503, {'error': '本机漂流瓶数据池暂不可用。'})
         if url.path == '/api/state':
             store = self.server.store
             query = parse_qs(url.query)
@@ -119,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 < length <= 4096:
+            if not 0 < length <= (16384 if self.path.startswith('/api/bottles/') else 4096):
                 return self.reply(413, {'error': 'Invalid body size'})
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
@@ -127,6 +137,13 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, TypeError):
             return self.reply(400, {'error': 'Invalid JSON'})
         store = self.server.store
+        if self.path.startswith('/api/bottles/'):
+            try:
+                return self.reply(200, self.server.bottles.command(self.path.removeprefix('/api/bottles/'), body))
+            except BottleError as exc:
+                return self.reply(exc.status, {'error': str(exc)})
+            except (OSError, sqlite3.Error):
+                return self.reply(503, {'error': '本机漂流瓶数据池暂不可用，请稍后再试。'})
         if self.path == '/api/shutdown':
             self.reply(200, {'ok': True})
             threading.Thread(target=self.server.shutdown, daemon=True).start()

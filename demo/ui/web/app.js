@@ -223,23 +223,23 @@ function sessionUrl(session) {
 }
 function renderSessions() {
   if(!state)return;
-  const priority={WAITING_USER:0,WORKING:1,FAILED:2,COMPLETED:3,IDLE:4};
-  const sessions=[...state.sessions].sort((a,b)=>(priority[a.state]??5)-(priority[b.state]??5)||(b.started||0)-(a.started||0)||a.id.localeCompare(b.id));
+  const sessions=state.sessions.filter(s=>s.state==='WORKING'&&!s.stale).sort((a,b)=>(b.started||0)-(a.started||0)||a.id.localeCompare(b.id));
   $('session-toggle').textContent=(sessionsExpanded?'收起会话':'展开会话')+' · '+sessions.length+(sessionsExpanded?' ▴':' ▾');
   // Tool/elapsed ticks must not recreate focused links or collapse the list.
   const next=JSON.stringify(sessions.map(s=>[s.id,s.provider,s.project_name,s.state,s.stale]));
   if(next===sessionInventory)return;sessionInventory=next;
   const box=$('session-list');box.replaceChildren();
-  box.append(element('p','点击会话可回到本地 ChatGPT；只打开会话，不发送消息或代你授权。','session-hint'));
-  if(!sessions.length){box.append(element('p','暂无会话信号。启动 Agent 后，会在这里显示。','empty'));return;}
+  box.append(element('p','仅展示正在工作且信号未过期的会话。点击按钮回到本地 ChatGPT，不发送消息或代你授权。','session-hint'));
+  if(!sessions.length){box.append(element('p','暂无正在工作的会话。','empty'));return;}
   for(const session of sessions){
-    const url=sessionUrl(session),card=element(url?'a':'article','','session'+(url?' session-link':''));
+    const url=sessionUrl(session),card=element('article','','session');
     const name=session.project_name||(session.provider==='demo'?'模拟演示':'未命名项目');
-    if(url){card.setAttribute('href',url);card.setAttribute('aria-label','在 ChatGPT 打开 '+name+' 会话（'+session.id.slice(6,14)+'）');}
     const copy=element('div','','session-copy');
     copy.append(element('strong',name+' · '+(labels[session.state]||session.state)),element('small',session.provider.toUpperCase()+' · '+session.id.split(':').slice(1).join(':').slice(0,8)));
-    if(session.stale)copy.append(element('p','信号超过 15 分钟未更新，状态不确定。'));
-    card.append(copy,element('span',url?'在 ChatGPT 打开 ↗':'仅状态 · 暂不支持跳转','session-action'));
+    const action=element(url?'a':'button',url?'打开会话 ↗':'暂不支持跳转','session-open');
+    if(url){action.setAttribute('href',url);action.setAttribute('aria-label','在 ChatGPT 打开 '+name+' 会话（'+session.id.slice(6,14)+'）');}
+    else{action.type='button';action.disabled=true;action.title='仅支持有效的本地 Codex 会话链接。';}
+    card.append(copy,action);
     box.append(card);
   }
 }

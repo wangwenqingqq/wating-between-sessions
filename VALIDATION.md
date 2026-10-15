@@ -1,5 +1,18 @@
 # Validation and evidence ledger
 
+## Working-session launcher — 2026-10-15
+
+The expanded session list and its count now include only non-stale `WORKING`
+signals. Waiting-for-input, completed, failed, idle and stale states are excluded
+without mutating the underlying sessions. Each supported local Codex row has an
+explicit button-styled native navigation link; unsupported providers/IDs have a
+disabled button, never an invented URL. Tests cover the mixed-state filter/count,
+strict UUID links, disabled fallbacks, completion removal, empty state and row
+identity across tool ticks. The revision passes 64 Python and 34 Node tests.
+Live browser QA showed two working rows/buttons instead of 17 stored sessions,
+with no horizontal overflow at 1,280px or 390px. The native links retain the
+previously user-confirmed URI contract; desktop-app navigation was not re-triggered.
+
 ## Recent public-topic Discovery — 2026-10-15
 
 Discovery now separates explicit external field/keyword searches from the folded

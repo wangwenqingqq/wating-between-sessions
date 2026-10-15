@@ -179,19 +179,26 @@ test('Visible waiting space never bypasses disabled history consent', async () =
   assert.match(nodes.get('chronicles').children[0].textContent,/历史分析已关闭/);
 });
 
-test('Status list keeps project names and prioritizes active sessions', () => {
+test('Session list shows only fresh working sessions, keeping names and an exact working count', () => {
   const {nodes,context}=setup();
   vm.runInContext(`state = {sessions: [
     {id:'codex:a',project_name: 'Alpha', state: 'COMPLETED', provider: 'codex'},
     {id:'claude:b',project_name: 'Beta', state: 'WORKING', provider: 'claude'},
     {id:'codex:e',project_name: 'Needs input', state: 'WAITING_USER', provider: 'codex'},
     {id:'codex:c',state: 'COMPLETED', provider: 'codex'},
-    {id:'demo:d',state: 'COMPLETED', provider: 'demo'}
+    {id:'demo:d',state: 'COMPLETED', provider: 'demo'},
+    {id:'codex:idle',state:'IDLE',provider:'codex'},
+    {id:'codex:failed',state:'FAILED',provider:'codex'},
+    {id:'codex:old',state:'WORKING',stale:true,provider:'codex'},
+    {id:'codex:new',state:'WORKING',stale:false,provider:'codex',project_name:'New work',started:100}
   ]}; renderSessions();`, context);
-  assert.deepEqual(nodes.get('session-list').children.filter(e=>e.className==='session'||e.className==='session session-link').map(card => card.children[0].children[0].textContent), [
-    'Needs input · Agent 需要你的确认', 'Beta · Agent 正在工作', 'Alpha · 本轮执行已结束',
-    '未命名项目 · 本轮执行已结束', '模拟演示 · 本轮执行已结束',
+  assert.deepEqual(nodes.get('session-list').children.filter(e=>e.className==='session').map(card => card.children[0].children[0].textContent), [
+    'New work · Agent 正在工作', 'Beta · Agent 正在工作',
   ]);
+  assert.match(nodes.get('session-toggle').textContent,/展开会话 · 2/);
+  const unsupported=nodes.get('session-list').children[2].children[1];
+  assert.equal(unsupported.tagName,'BUTTON');assert.equal(unsupported.disabled,true);
+  assert.equal(unsupported.textContent,'暂不支持跳转');
 });
 
 test('Only strict local Codex UUIDs become ChatGPT deep links', () => {
@@ -202,11 +209,14 @@ test('Only strict local Codex UUIDs become ChatGPT deep links', () => {
   for(const [provider,session] of [['claude','codex:'+id],['demo','codex:'+id],['codex','codex:javascript:alert(1)'],['codex','codex:'+id+'?prompt=send'],['codex','codex:../../settings'],['codex',id]]){
     context.fixture={provider,id:session};assert.equal(vm.runInContext('sessionUrl(fixture)',context),'');
   }
-  vm.runInContext("state={sessions:[{id:'codex:'+sessionID,provider:'codex',state:'WORKING',project_name:'<img onerror=bad>',stale:true}]};renderSessions();",context);
+  vm.runInContext("state={sessions:[{id:'codex:'+sessionID,provider:'codex',state:'WORKING',project_name:'<img onerror=bad>',stale:false}]};renderSessions();",context);
   const row=nodes.get('session-list').children[1];
-  assert.equal(row.tagName,'A');assert.equal(row.href,'codex://threads/'+id);
+  assert.equal(row.tagName,'ARTICLE');
+  const action=row.children[1];assert.equal(action.tagName,'A');assert.equal(action.href,'codex://threads/'+id);
+  assert.equal(action.className,'session-open');assert.equal(action.textContent,'打开会话 ↗');
+  assert.match(action['aria-label'],/在 ChatGPT 打开/);
   assert.equal(row.children[0].children[0].textContent,'<img onerror=bad> · Agent 正在工作');
-  assert.match(row.children[0].children[2].textContent,/不确定/);
+  assert.equal(row.children[0].children.length,2);
 });
 
 test('Session list expands independently and preserves links on tool ticks', () => {
@@ -218,7 +228,9 @@ test('Session list expands independently and preserves links on tool ticks', () 
   vm.runInContext("state.sessions[0].detail='PreToolUse';state.sessions[0].elapsed=20;renderSessions();",context);
   assert.equal(list.children[1],row);assert.equal(list.hidden,false);
   vm.runInContext("state.sessions[0].state='COMPLETED';renderSessions();",context);
-  assert.match(list.children[1].children[0].children[0].textContent,/本轮执行已结束/);assert.equal(list.hidden,false);
+  assert.equal(list.children[1].className,'empty');assert.equal(list.hidden,false);
+  assert.match(list.children[1].textContent,/暂无正在工作的会话/);
+  assert.match(button.textContent,/收起会话 · 0/);
   assert.equal(nodes.get('panel').hidden,false);assert.equal(list.hidden,false);
   button.onclick();assert.equal(button['aria-expanded'],'false');assert.equal(list.hidden,true);
   vm.runInContext('state.sessions=[];renderSessions();',context);

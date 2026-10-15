@@ -59,6 +59,9 @@ Source recovery is read-only and never marks a record read. The evidence dialog
 still rechecks the source on each explicit open.
 
 Live sessions sit in a collapsible list below the status strip, not a reading tab.
+Only non-stale `WORKING` sessions enter the list/count. Each row has a native
+button-styled jump link or an explicitly disabled unsupported-provider button;
+completed and waiting-for-input signals remain stored but are not listed.
 The UI creates only `codex://threads/<UUID>` navigation links for Codex sessions;
 other providers remain status-only. Opening a chat uses the desktop URL handler,
 not a new server-side shell endpoint or message/control channel. Session rows

@@ -64,6 +64,24 @@ pre-change canonical SHA-256 checkpoint exactly. No real user story or
 conversation was posted. Public deployment, cross-device
 accounts, adversarial abuse prevention and community/user-value claims are absent.
 
+### Compact entry revision — 2026-10-15
+
+The entry is now only an accessible small bottle icon and two pale buttons,
+**投递 / 收回**. The field form stays hidden until deliver is clicked. Retrieve
+does not enroll a new participant or expose onboarding fields. Sharing details
+use a collapsed native disclosure; field and message consent remain separate.
+The revision passes 53 Python and 27 Node tests, including direct-to-editor
+onboarding, entry toggling, close-during-request and no implicit message consent.
+
+Browser QA checked the collapsed entry and expanded fields at 1,280px and 390px,
+without horizontal overflow. An isolated synthetic participant selected a field,
+continued directly to writing, posted a labeled Markdown note, retrieved it and
+picked a second synthetic participant's same-field note. The real profile was
+not enrolled, and its 223 timeline records still match the canonical checkpoint.
+Both isolated test profiles were withdrawn and the test companion stopped; only
+two non-content replay-prevention hashes remain. No backend, public deployment
+or notification behavior changed.
+
 ## Original implementation record — 2026-10-14
 
 ## Contract

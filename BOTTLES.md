@@ -2,8 +2,11 @@
 
 ## Scope
 
-The intro-area entry opens an inline, collapsible exchange. This version is
-deliberately **same-machine only**, as requested: two independently authenticated
+The intro shows a small bottle icon and two pale buttons: **投递** (deliver) and
+**收回** (retrieve). Fields appear only after choosing deliver; retrieve opens
+your bottles/replies, with a secondary tab for same-field bottles. The exchange
+stays inline and collapsible, and detailed sharing information is folded away.
+This version is deliberately **same-machine only**, as requested: two independently authenticated
 companion instances share a separate local SQLite pool. It is not a public
 community, a cloud upload, an account system, or evidence of real peer demand.
 There are no seeded members, generated messages, remote requests or model calls.
@@ -57,9 +60,11 @@ python3 demo/app.py start --watch-codex --open
 python3 demo/app.py --data-dir "$HOME/.local/share/between-peer-b" start --open
 ```
 
-Open **科研漂流瓶** in each instance, choose the same field and explicitly agree
-to share it. A posts a clearly labeled test note; B picks and replies; A opens
-the note from **我的瓶子与回声** to refresh. Each instance has a different loopback
+Click **投递** beside the bottle icon in each instance, choose the same field and
+explicitly agree to share it. Continue goes directly to the editor; sharing the
+text requires separate consent. A posts a clearly labeled test note; B uses
+**收回 → 同领域瓶子** to pick and reply; A opens the note from
+**收回 → 我的瓶子与回声** to refresh. Each instance has a different loopback
 port and bearer key. Never distribute its runtime file or access key.
 
 Both instances default to `~/.local/share/agent-waiting-bottles/bottles.db`.

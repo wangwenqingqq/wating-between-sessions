@@ -33,6 +33,9 @@ function setup(storage=new Map()) {
   document.getElementById('panel').hidden=true;
   document.getElementById('wait-invitation').hidden=true;
   document.getElementById('bottle-panel').hidden=true;
+  document.getElementById('bottle-profile-form').hidden=true;
+  document.getElementById('bottle-message-consent').checked=false;
+  document.getElementById('bottle-reply-consent').checked=false;
   return {nodes,context};
 }
 
@@ -311,6 +314,10 @@ test('Bottle entry sits in the requested intro, starts collapsed and never uploa
   const html=fs.readFileSync(path.join(__dirname,'../demo/ui/web/index.html'),'utf8');
   assert.ok(html.indexOf('id="bottle-open"')<html.indexOf('id="status-title"'));
   assert.match(html,/<section id="bottle-panel"[^>]* hidden>/);
+  const entry=html.match(/<div class="bottle-entry">([\s\S]*?)<\/div>/)[1];
+  assert.match(entry,/aria-label="科研漂流瓶"[^>]*><svg/);
+  assert.deepEqual([...entry.matchAll(/<button[^>]*>([^<]+)<\/button>/g)].map(m=>m[1]),['投递','收回']);
+  assert.match(html,/<details class="bottle-privacy"><summary>/);
   nodes.get('bottle-open').onclick();await flushUI();
   assert.equal(requests,1);assert.equal(nodes.get('bottle-panel').hidden,false);
   assert.equal(nodes.get('panel').hidden,true);assert.equal(nodes.get('bottle-workbench').hidden,true);
@@ -336,10 +343,10 @@ test('Selecting interests stays local until explicit consented submit', async()=
 test('Bottles show honest empty state and safe Markdown replies without identity fields', async()=>{
   const {nodes,context}=setup();let picked=false;
   const bottle={id:'00000000-0000-4000-8000-000000000001',field:'gpu',body:'## Synthetic concern\n\n- **test only**\n\n<img src=x onerror=bad>',created:1,mine:false,replies:[{id:'r',body:'> A supportive *reply*',created:2,mine:false,from_author:false}]};
-  bottleFetch(context,url=>url.endsWith('/status')?{...bottleProfileFixture,joined:true,interests:['gpu']}:{bottle:picked?bottle:null});
-  nodes.get('bottle-open').onclick();await flushUI();nodes.get('bottle-field').value='gpu';
+  bottleFetch(context,url=>url.endsWith('/status')?{...bottleProfileFixture,joined:true,interests:['gpu']}:url.endsWith('/mine')?{bottles:[],replies:[]}:{bottle:picked?bottle:null});
+  nodes.get('bottle-receive').onclick();await flushUI();nodes.get('bottle-nav-pick').onclick();nodes.get('bottle-field').value='gpu';
   nodes.get('bottle-pick').onclick();await flushUI();
-  assert.match(nodes.get('bottle-status').textContent,/没有假用户/);assert.equal(nodes.get('bottle-detail').hidden,true);
+  assert.match(nodes.get('bottle-status').textContent,/暂时没有新的/);assert.equal(nodes.get('bottle-detail').hidden,true);
   picked=true;nodes.get('bottle-pick').onclick();await flushUI();
   assert.match(nodes.get('bottle-note').innerHTML,/<h2>Synthetic concern<\/h2>/);
   assert.match(nodes.get('bottle-note').innerHTML,/<strong>test only<\/strong>/);
@@ -357,7 +364,7 @@ test('Failed bottle submission preserves draft and retry nonce, never attaches c
     return {ok:true,json:async()=>url.endsWith('/status')?{...bottleProfileFixture,joined:true,interests:['gpu']}:url.endsWith('/mine')?{bottles:[{...bottle,reply_count:0}],replies:[]}:{bottle}};
   };
   nodes.get('bottle-open').onclick();await flushUI();nodes.get('bottle-field').value='gpu';
-  nodes.get('bottle-nav-write').onclick();nodes.get('bottle-message').value='Synthetic draft';
+  assert.equal(nodes.get('bottle-write-view').hidden,false);nodes.get('bottle-message').value='Synthetic draft';
   nodes.get('bottle-write-view').onsubmit({preventDefault(){}});await flushUI();assert.equal(posts.length,0);
   nodes.get('bottle-message-consent').checked=true;
   nodes.get('bottle-write-view').onsubmit({preventDefault(){}});await flushUI();
@@ -372,8 +379,45 @@ test('Failed bottle submission preserves draft and retry nonce, never attaches c
 test('My replies remain reachable after reload, and reading bottles suppresses redundant waiting invitations', async()=>{
   const {nodes,context}=setup();
   bottleFetch(context,url=>url.endsWith('/status')?{...bottleProfileFixture,joined:true,interests:['gpu']}:{bottles:[],replies:[{id:'r',bottle_id:'b',field:'gpu',body:'A synthetic reply',created:1}]});
-  nodes.get('bottle-open').onclick();await flushUI();nodes.get('bottle-nav-mine').onclick();await flushUI();
+  nodes.get('bottle-receive').onclick();await flushUI();
   assert.equal(nodes.get('bottle-mine-view').children.filter(e=>e.className==='bottle-mine-card').length,1);
   waiting(context);assert.equal(nodes.get('wait-invitation').hidden,true);
   nodes.get('bottle-close').onclick();waiting(context);assert.equal(nodes.get('wait-invitation').hidden,true);
+});
+
+test('Receive never exposes enrollment fields; only Deliver reveals fields and consent', async()=>{
+  const {nodes,context}=setup(),requests=[];
+  bottleFetch(context,(url,data)=>{requests.push({url,data});return bottleProfileFixture;});
+  nodes.get('bottle-receive').onclick();await flushUI();
+  assert.equal(nodes.get('bottle-profile-form').hidden,true);
+  assert.equal(nodes.get('bottle-workbench').hidden,true);
+  assert.match(nodes.get('bottle-status').textContent,/还没有投出的瓶子/);
+  assert.equal(nodes.get('bottle-receive')['aria-expanded'],'true');
+  nodes.get('bottle-open').onclick();await flushUI();
+  assert.equal(nodes.get('bottle-profile-form').hidden,false);
+  assert.equal(nodes.get('bottle-interest-consent').checked,false);
+  assert.equal(nodes.get('bottle-open')['aria-expanded'],'true');
+  assert.equal(nodes.get('bottle-receive')['aria-expanded'],'false');
+  assert.ok(requests.every(r=>r.url==='/api/bottles/status'&&r.data===null));
+  nodes.get('bottle-open').onclick();
+  assert.equal(nodes.get('bottle-panel').hidden,true);
+  assert.equal(nodes.get('bottle-open')['aria-expanded'],'false');
+});
+
+test('Saving fields continues directly to writing, and close during a request stays closed', async()=>{
+  const {nodes,context}=setup();let resolve;
+  context.fetch=()=>new Promise(r=>{resolve=r;});
+  nodes.get('bottle-open').onclick();nodes.get('bottle-close').onclick();
+  resolve({ok:true,json:async()=>bottleProfileFixture});await flushUI();
+  assert.equal(nodes.get('bottle-panel').hidden,true);
+  assert.equal(nodes.get('bottle-open')['aria-expanded'],'false');
+  bottleFetch(context,(url,data)=>url.endsWith('/profile')?{...bottleProfileFixture,joined:true,interests:data.interests}:bottleProfileFixture);
+  nodes.get('bottle-open').onclick();await flushUI();
+  const check=nodes.get('bottle-fields').children[0].children[0];check.checked=true;check.onchange();
+  nodes.get('bottle-interest-consent').checked=true;
+  nodes.get('bottle-profile-form').onsubmit({preventDefault(){}});await flushUI();
+  assert.equal(nodes.get('bottle-profile-form').hidden,true);
+  assert.equal(nodes.get('bottle-write-view').hidden,false);
+  assert.equal(nodes.get('bottle-inbox-tabs').hidden,true);
+  assert.equal(nodes.get('bottle-message-consent').checked,false);
 });

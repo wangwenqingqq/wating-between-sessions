@@ -1,5 +1,5 @@
 'use strict';
-let bottleProfile=null,bottleCurrent=null,bottleMode='pick',bottleBusy=false;
+let bottleProfile=null,bottleCurrent=null,bottleMode='write',bottleBusy=false;
 let bottleDraft=new Set(),bottleSeen=[];
 
 function bottleMessage(text,error=false){$('bottle-status').textContent=text;$('bottle-status').className='bottle-status'+(error?' error':'');}
@@ -9,9 +9,12 @@ function bottleSetMode(mode){
   bottleMode=mode;bottleCurrent=null;$('bottle-detail').hidden=true;
   for(const key of ['pick','write','mine']){
     $('bottle-'+key+'-view').hidden=key!==mode;
-    $('bottle-nav-'+key).setAttribute('aria-pressed',String(key===mode));
+    if(key!=='write')$('bottle-nav-'+key).setAttribute('aria-pressed',String(key===mode));
   }
   $('bottle-field-label').hidden=mode==='mine';
+  $('bottle-inbox-tabs').hidden=mode==='write';
+  $('bottle-open').setAttribute('aria-expanded',String(!$('bottle-panel').hidden&&mode==='write'));
+  $('bottle-receive').setAttribute('aria-expanded',String(!$('bottle-panel').hidden&&mode!=='write'));
 }
 async function bottleRun(task){
   if(bottleBusy)return;bottleBusy=true;
@@ -23,10 +26,11 @@ async function bottleRun(task){
   }
   finally{bottleBusy=false;controls.forEach(e=>e.disabled=false);}
 }
-function renderBottleProfile(data){
+function renderBottleProfile(data,mode=bottleMode){
   bottleProfile=data;bottleDraft=new Set(data.interests);
-  $('bottle-profile-form').hidden=data.joined;$('bottle-workbench').hidden=!data.joined;
+  $('bottle-profile-form').hidden=data.joined||mode!=='write';$('bottle-workbench').hidden=!data.joined;
   $('bottle-profile-cancel').hidden=!data.joined;$('bottle-interest-consent').checked=false;
+  $('bottle-field-warning').hidden=!data.joined;$('bottle-withdraw').hidden=!data.joined;
   const fields=$('bottle-fields');fields.replaceChildren();
   for(const field of data.fields){
     const label=element('label','','bottle-field-chip'),input=document.createElement('input');
@@ -40,8 +44,7 @@ function renderBottleProfile(data){
   const selected=$('bottle-field').value;$('bottle-field').replaceChildren();
   for(const id of data.interests)$('bottle-field').append(new Option(bottleFieldName(id),id));
   if(data.interests.includes(selected))$('bottle-field').value=selected;
-  $('bottle-membership').textContent='已共享领域：'+data.interests.map(bottleFieldName).join(' / ');
-  bottleSetMode('pick');
+  bottleSetMode(mode);
 }
 function renderBottle(data){
   bottleCurrent=data;$('bottle-detail').hidden=false;
@@ -66,16 +69,14 @@ function renderBottle(data){
 }
 function renderBottleMine(data){
   const root=$('bottle-mine-view');root.replaceChildren();
-  if(!data.bottles.length&&!data.replies.length){root.append(element('p','你还没有投出瓶子或留下回声。想说的时候再写，不必为了热闹而发言。','subtle'));return;}
-  root.append(element('p','最近 50 只瓶子和 50 条你的回声。打开可主动刷新、查看回应或撤回自己的内容。','subtle'),element('h3','投出的瓶子'));
-  if(!data.bottles.length)root.append(element('p','还没有投出的瓶子。','subtle'));
+  if(!data.bottles.length&&!data.replies.length){root.append(element('p','还没有投出的瓶子或回声。','subtle'));return;}
+  if(data.bottles.length)root.append(element('h3','投出的瓶子'));
   for(const bottle of data.bottles){
     const card=element('button','','bottle-mine-card');
     card.append(element('span',bottleFieldName(bottle.field)+' · '+bottleDate(bottle.created)),element('p',BetweenMarkdown.plainText(bottle.body).slice(0,160)),element('small',bottle.reply_count+' 条回声 · 打开查看 ↗'));
     card.onclick=()=>bottleRun(async()=>{renderBottle((await api('bottles/read',{bottle_id:bottle.id})).bottle);bottleMessage('回声已更新。');});root.append(card);
   }
-  root.append(element('h3','留下的回声'));
-  if(!data.replies.length)root.append(element('p','还没有留下回声。','subtle'));
+  if(data.replies.length)root.append(element('h3','留下的回声'));
   for(const reply of data.replies){
     const card=element('button','','bottle-mine-card');
     card.append(element('span',bottleFieldName(reply.field)+' · '+bottleDate(reply.created)),element('p',BetweenMarkdown.plainText(reply.body).slice(0,160)),element('small','打开原瓶子 · 可撤回自己的回声 ↗'));
@@ -85,42 +86,54 @@ function renderBottleMine(data){
 function bottleConsent(input){if(!$(input).checked)throw new Error('请先明确同意共享，再提交。');}
 function bottleRequestId(id){const input=$(id);return input.dataset.requestId||(input.dataset.requestId=crypto.randomUUID());}
 
-$('bottle-open').onclick=()=>{
-  const closed=$('bottle-panel').hidden;
-  $('bottle-panel').hidden=!closed;$('bottle-open').setAttribute('aria-expanded',String(closed));
-  if(!closed)return;
+function closeBottles(){
+  $('bottle-panel').hidden=true;
+  $('bottle-open').setAttribute('aria-expanded','false');$('bottle-receive').setAttribute('aria-expanded','false');
+}
+function openBottles(mode){
+  if(bottleBusy)return;
+  if(!$('bottle-panel').hidden&&(bottleMode==='write')===(mode==='write')){closeBottles();return;}
+  $('bottle-panel').hidden=false;bottleSetMode(mode);bottleMessage('');
   hideInvitation();if(state)rememberOffers(state.sessions);
-  bottleRun(async()=>{renderBottleProfile(await api('bottles/status'));bottleMessage(bottleProfile.joined?'领域已共享。由你决定什么时候捞取或投递。':'尚未共享领域。选择和勾选同意后，才会提交到本机数据池。');});
-};
-$('bottle-close').onclick=()=>{$('bottle-panel').hidden=true;$('bottle-open').setAttribute('aria-expanded','false');};
+  bottleRun(async()=>{
+    renderBottleProfile(await api('bottles/status'),mode);
+    if(mode==='mine'){
+      if(bottleProfile.joined)renderBottleMine(await api('bottles/mine',{}));
+      else bottleMessage('还没有投出的瓶子或回声。');
+    }
+  });
+}
+$('bottle-open').onclick=()=>openBottles('write');
+$('bottle-receive').onclick=()=>openBottles('mine');
+$('bottle-close').onclick=closeBottles;
 $('bottle-profile-form').onsubmit=event=>{
   event.preventDefault();bottleRun(async()=>{
     bottleConsent('bottle-interest-consent');if(!bottleDraft.size)throw new Error('请至少选择一个领域。');
-    renderBottleProfile(await api('bottles/profile',{interests:[...bottleDraft],consent:true}));bottleSeen=[];bottleMessage('已共享所选领域。这里不会展示你的姓名或会话。');
+    renderBottleProfile(await api('bottles/profile',{interests:[...bottleDraft],consent:true}),'write');bottleSeen=[];bottleMessage('');
   });
 };
-$('bottle-manage').onclick=()=>{$('bottle-profile-form').hidden=false;$('bottle-workbench').hidden=true;$('bottle-interest-consent').checked=false;};
+$('bottle-manage').onclick=()=>{renderBottleProfile(bottleProfile,'write');$('bottle-profile-form').hidden=false;$('bottle-workbench').hidden=true;};
 $('bottle-profile-cancel').onclick=()=>renderBottleProfile(bottleProfile);
 $('bottle-withdraw').onclick=()=>{
   if(!confirm('退出漂流瓶，并撤回你共享的全部领域、瓶子和回声？别人在你的瓶子下的回声也会一起移除。原始对话和编年史不受影响。此操作不可恢复。'))return;
   bottleRun(async()=>{renderBottleProfile(await api('bottles/withdraw',{confirm:'WITHDRAW'}));bottleSeen=[];$('bottle-message').value='';$('bottle-note').replaceChildren();$('bottle-replies').replaceChildren();$('bottle-mine-view').replaceChildren();$('bottle-reply').value='';bottleMessage('已退出，全部共享内容已从本机试用池撤回。已打开的页面、截图或备份不在此操作范围内。');});
 };
-for(const mode of ['pick','write','mine'])$('bottle-nav-'+mode).onclick=()=>{
+for(const mode of ['pick','mine'])$('bottle-nav-'+mode).onclick=()=>{
   bottleSetMode(mode);bottleMessage('');
   if(mode==='mine')bottleRun(async()=>renderBottleMine(await api('bottles/mine',{})));
 };
 $('bottle-field').onchange=()=>{bottleSeen=[];bottleCurrent=null;$('bottle-detail').hidden=true;$('bottle-message').dataset.requestId='';bottleMessage('已切换领域。');};
 $('bottle-pick').onclick=()=>bottleRun(async()=>{
   const data=await api('bottles/pick',{field:$('bottle-field').value,exclude:bottleSeen});
-  if(data.bottle){bottleSeen=[...bottleSeen,data.bottle.id].slice(-100);renderBottle(data.bottle);bottleMessage('捞到一只同领域的瓶子。可以留下共鸣，也可以安静地读完。');}
-  else{bottleCurrent=null;$('bottle-detail').hidden=true;bottleMessage('这一轮暂时没有新的同领域漂流瓶。没有假用户或自动生成的内容；可以稍后再来。');}
+  if(data.bottle){bottleSeen=[...bottleSeen,data.bottle.id].slice(-100);renderBottle(data.bottle);bottleMessage('');}
+  else{bottleCurrent=null;$('bottle-detail').hidden=true;bottleMessage('暂时没有新的同领域漂流瓶。');}
 });
 $('bottle-write-view').onsubmit=event=>{
   event.preventDefault();bottleRun(async()=>{
     bottleConsent('bottle-message-consent');
     const data=await api('bottles/throw',{field:$('bottle-field').value,body:$('bottle-message').value,consent:true,request_id:bottleRequestId('bottle-message')});
     $('bottle-message').value='';$('bottle-message').dataset.requestId='';$('bottle-message-consent').checked=false;
-    bottleSetMode('mine');renderBottleMine(await api('bottles/mine',{}));renderBottle(data.bottle);bottleMessage('瓶子已投出。你可以在这里主动刷新查看回声，不会强制弹窗。');
+    bottleSetMode('mine');renderBottleMine(await api('bottles/mine',{}));renderBottle(data.bottle);bottleMessage('已投递。');
   });
 };
 $('bottle-reply-form').onsubmit=event=>{

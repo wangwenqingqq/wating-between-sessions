@@ -100,8 +100,10 @@ MVP does not manipulate that trust state or claim to install such hooks.
 
 ## Research drift bottles
 
-Use **科研漂流瓶** in the intro area. Choosing fields does not submit them;
-explicit consent and the share button are required. Bottles and replies have
+The intro has a small bottle icon and pale **投递 / 收回** buttons. Only clicking
+**投递** reveals field selection; **收回** opens your bottles and replies, with
+same-field picking in a secondary tab. Choosing fields does not submit them;
+explicit consent and the continue button are required. Bottles and replies have
 separate consent checks. The matching-field pool is genuinely shared by separate
 local companion profiles, but is empty until somebody explicitly posts. No fake
 users or seeded personal stories are supplied. The usual reading panel remains

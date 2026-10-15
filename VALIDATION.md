@@ -27,6 +27,19 @@ not observed macOS delivery.
 Browser/OS notification delivery with a closed/frozen page remains unaccepted;
 there is no native notification daemon or user-outcome claim.
 
+### Background system-delivery smoke check — 2026-10-15
+
+After the user manually allowed notifications, the browser settings UI reported
+permission granted. A three-second, explicitly labeled synthetic turn ran through
+the normal state manager and persisted completion feed. The page displayed the
+matching synthetic completion notice and its reading panel remained collapsed.
+The user separately confirmed seeing the corresponding Between notification in
+the macOS system banner or notification center, not only the in-page notice.
+This is human-confirmed OS receipt in one local background test, not an automated
+OS screenshot or a reliability/SLA result. No real session state or timeline
+content was changed. Native waiting-invitation delivery/click navigation and
+closed/frozen-page delivery were not tested by this three-second completion check.
+
 ## Original implementation record — 2026-10-14
 
 ## Contract

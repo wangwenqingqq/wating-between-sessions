@@ -47,7 +47,7 @@ personal history improves waiting experience. No user-value evidence exists yet.
 | Hook start/stop/permission validation | Contract fixtures and subprocess tests pass; real Claude pending |
 | 100 real historical sessions | Imported locally; subset and quality caveats in evaluation |
 | Independent UI updates / three modes | Implemented and browser-checked |
-| Delayed automatic display | Implemented; observed current real Codex activity; synthetic timing regression separate |
+| Delayed opt-in invitation | Replaces automatic display; explicit entry/decline, no lifecycle-triggered browser launch; browser delivery requires a live page |
 | Reliable real-task completion / no interruption | Synthetic notice/focus checks; 30-task live acceptance still pending |
 | 50-event semantic review | Exact-source audit done; human semantic labels pending |
 | User-value / retention hypothesis | No participants or outcome claims |

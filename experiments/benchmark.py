@@ -13,7 +13,7 @@ from core.store import Store
 
 
 def main():
-    checks = passed = opens = 0
+    checks = passed = eligible = 0
     timings = []
     with tempfile.TemporaryDirectory() as root:
         manager = StateManager(Store(root))
@@ -30,17 +30,19 @@ def main():
                 checks += 1
                 passed += actual['state'] == expected
             manager.apply(session, 'demo', 'UserPromptSubmit', now=110)
-            opens += manager.claim_open(115)
-            assert not manager.claim_open(116)
+            row = lambda now: next(r for r in manager.snapshot(now) if r['id'] == 'demo:' + session)
+            assert not row(114.99)['panel_due']
+            eligible += row(115)['panel_due']
             manager.apply(session, 'demo', 'Stop', now=117)
+            assert not row(118)['panel_due']
     report = dict(label='SYNTHETIC_NOT_REAL_HOST_ACCEPTANCE', scenarios=30, checks=checks,
-                          passed=passed, single_open_turns=opens,
+                          passed=passed, invitation_eligible_turns=eligible,
                           apply_ms_median=round(statistics.median(timings), 3),
                           apply_ms_p95=round(sorted(timings)[int(len(timings) * .95)], 3))
     output = Store().root / 'synthetic-benchmark.json'
     output.write_text(json.dumps(dict(report, apply_ms_order=timings), indent=2))
     print(json.dumps(report, indent=2))
-    assert checks == passed and opens == 30
+    assert checks == passed and eligible == 30
 
 
 if __name__ == '__main__':

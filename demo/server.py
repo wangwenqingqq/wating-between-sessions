@@ -24,7 +24,6 @@ class Server(ThreadingHTTPServer):
     def __init__(self, store, port=8765, watch_root=None):
         self.store, self.manager = store, StateManager(store)
         self.token = secrets.token_urlsafe(32)
-        self.last_client = self.last_open = 0
         self.observation_started = time.time()
         self.watcher = CodexWatcher(self.manager, watch_root) if watch_root else None
         self.stopped = threading.Event()
@@ -37,11 +36,6 @@ class Server(ThreadingHTTPServer):
             try:
                 if self.watcher:
                     self.watcher.poll()
-                if self.manager.claim_open():
-                    now = time.time()
-                    if now - self.last_client > 10 and now - self.last_open > 10:
-                        self.last_open = now
-                        webbrowser.open(self.panel_url, new=2)
             except Exception as exc:
                 # Do not log message content or raw hook payloads.
                 print('Observer tick failed: ' + type(exc).__name__, flush=True)
@@ -88,7 +82,6 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/health':
             return self.reply(200, {'ok': True, 'app': 'agent-waiting-experience'})
         if url.path == '/api/state':
-            self.server.last_client = time.time()
             store = self.server.store
             query = parse_qs(url.query)
             try:
@@ -187,7 +180,6 @@ def serve(store, port, watch_root=None, open_panel=False):
         thread.start()
         print('Waiting panel listening at ' + server.base + ' (access key stored locally)', flush=True)
         if open_panel:
-            server.last_open = time.time()
             webbrowser.open(server.panel_url, new=2)
 
         def stop(signum, frame):

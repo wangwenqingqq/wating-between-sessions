@@ -87,20 +87,3 @@ class StateManager:
             d['panel_due'] = d['state'] == 'WORKING' and d['elapsed'] >= 5 and not d['stale']
             result.append(d)
         return result
-
-    def claim_open(self, now=None):
-        now = time.time() if now is None else now
-        if not self.store.get('auto_show', True):
-            return False
-        for session in self.snapshot(now):
-            if not session['panel_due'] or session['opened_turn'] == session['turn_id']:
-                continue
-            with self.store.connect() as db:
-                db.execute('BEGIN IMMEDIATE')
-                changed = db.execute('''UPDATE sessions SET opened_turn=turn_id
-                    WHERE id=? AND turn_id=? AND state='WORKING' AND started<=? AND updated>=?
-                    AND opened_turn<>turn_id''',
-                                     (session['id'], session['turn_id'], now - 5, now - 900)).rowcount
-            if changed:
-                return True
-        return False

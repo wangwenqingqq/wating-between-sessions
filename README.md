@@ -4,7 +4,7 @@ A local waiting panel with an evidence-linked conversation timeline. No model
 API, third-party Python package, telemetry, or host source modification is needed.
 The interface is in Chinese; project documentation is in English.
 
-**Implemented:** lifecycle state machine, five-second delayed display, Timeline /
+**Implemented:** lifecycle state machine, five-second optional waiting invitation, Timeline /
 Discovery, collapsible live sessions, non-interrupting completion notices, per-session isolation,
 local import/deduplication, source-record verification, and privacy controls.
 **Not yet accepted:** 30 real host-task accuracy trials, a human semantic audit of
@@ -25,7 +25,10 @@ python3 demo/app.py start --watch-codex --open
 
 On macOS, double-click `demo/start.command` after the consented import. It starts
 the same service and opens the panel. It does not install a login item. Once the
-service is running, subsequent observed turns need no per-task UI command.
+service and browser page are running, subsequent observed turns need no per-task
+UI command. Starting without `--open` observes quietly and never launches a
+browser in response to a task. Opening the page is not consent to enter its
+reading panel: use **进入等待空间** when you want to read.
 
 ```sh
 python3 demo/app.py open       # Reopen, or reconnect after a service restart
@@ -55,8 +58,8 @@ python3 demo/app.py import-history --provider claude --limit 100 --consent
 
 Review and trust the plugin in the host when requested. No settings or trust
 records are edited automatically. Hooks only observe; they emit no model
-instructions or permission decisions. The service must be running for automatic
-display. The current machine has no `claude` executable, so this packaging has
+instructions or permission decisions. The service and browser page must be
+running for waiting invitations. The current machine has no `claude` executable, so this packaging has
 only fixture/subprocess validation, not live-host acceptance. See the
 [official hook contract](https://code.claude.com/docs/en/hooks).
 
@@ -162,12 +165,25 @@ encrypted; the same OS user can read it. Credential-pattern exclusion is
 best-effort, not a guarantee that all sensitive prose is detected. Keep it off
 shared screens and never publish the private data directory.
 
-Close hides content for the current observed turns. Disable auto-show to suppress
-future automatic opens. Completion produces an in-page notice without changing
-the selected mode, scroll position, or focus. Optional browser notifications need
-the user's permission and a live browser page; delivery is not guaranteed with a
-closed/frozen browser or OS restrictions. No notification permission is granted
-automatically. There is no percentage-progress estimate.
+Waiting never launches a browser, expands the reading panel, or steals focus.
+The panel starts collapsed. After five seconds of observed work, a non-modal
+corner invitation offers **进入等待空间** / **暂不进入**. Only an explicit entry
+click expands the content. Declining or closing suppresses invitations for the
+observed turns; the tab remembers offers across reloads (bounded to 200 turn keys
+in session storage). Concurrent turns share one invitation. Finished, stale or
+waiting-for-input turns no longer invite. Disable **等待邀请** to suppress future
+invitations; the existing `auto_show` setting is retained for compatibility, but
+now controls invitations, never automatic opens. The legacy `opened_turn` DB
+column is preserved without further use; existing evidence is not migrated.
+
+Completion produces an in-page notice without changing the selected mode, scroll
+position, or focus. Optional browser notifications need the user's permission
+and a live browser page. Background waiting notifications are dismissible; only
+clicking a still-current invitation focuses the page and enters. Closing the
+browser page means no invitation delivery; frozen pages and OS/browser restrictions
+can also delay or block delivery. No notification permission is requested
+automatically. An explicit CLI `open` / `--open` remains user-initiated. There is
+no percentage-progress estimate or native always-on-top window.
 
 ## Reproduce validation
 

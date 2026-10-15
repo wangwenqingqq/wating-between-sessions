@@ -41,32 +41,32 @@ class MVPTests(unittest.TestCase):
     def row(self):
         return self.manager.snapshot(now=110)[0]
 
-    def test_five_second_delay_and_single_open(self):
+    def test_five_second_invitation_threshold_and_stable_timer(self):
         self.manager.apply('s', 'claude', 'UserPromptSubmit', now=100)
-        self.assertFalse(self.manager.claim_open(104.99))
-        self.assertTrue(self.manager.claim_open(105))
-        self.assertFalse(self.manager.claim_open(106))
+        self.assertFalse(self.manager.snapshot(104.99)[0]['panel_due'])
+        self.assertTrue(self.manager.snapshot(105)[0]['panel_due'])
         for _ in range(50):
             self.manager.apply('s', 'claude', 'PostToolUse', now=107)
         self.assertEqual(self.row()['started'], 100)
-        self.assertFalse(self.manager.claim_open(110))
+        self.assertTrue(self.row()['panel_due'])
+        self.manager.apply('s', 'claude', 'PermissionRequest', now=111)
+        self.assertFalse(self.manager.snapshot(112)[0]['panel_due'])
+        self.manager.apply('s', 'claude', 'Stop', now=113)
+        self.assertFalse(self.manager.snapshot(114)[0]['panel_due'])
 
-    def test_disable_auto(self):
-        self.store.set('auto_show', False)
-        self.manager.apply('s', 'claude', 'UserPromptSubmit', now=100)
-        self.assertFalse(self.manager.claim_open(110))
-
-    def test_open_claim_rechecks_turn_and_terminal_state(self):
-        snapshot = self.manager.snapshot
-        for next_event in ['Stop', 'UserPromptSubmit']:
-            self.manager.apply('s', 'claude', 'UserPromptSubmit', now=100)
-            def raced(now):
-                rows = snapshot(now)
-                self.manager.apply('s', 'claude', next_event, now=110)
-                return rows
-            self.manager.snapshot = raced
-            self.assertFalse(self.manager.claim_open(110))
-            self.manager.snapshot = snapshot
+    def test_background_observer_never_opens_browser(self):
+        self.manager.apply('s', 'codex', 'UserPromptSubmit', now=time.time() - 10)
+        for auto_show in [True, False]:
+            self.store.set('auto_show', auto_show)
+            server = Server(self.store, port=0)
+            try:
+                self.assertTrue(server.manager.snapshot()[0]['panel_due'])
+                with patch.object(server.stopped, 'wait', side_effect=[False, True]), \
+                        patch('server.webbrowser.open') as browser_open:
+                    server.tick()
+                    browser_open.assert_not_called()
+            finally:
+                server.server_close()
 
     def test_permissions_and_recoverable_tool_failure(self):
         for event, expected in [('UserPromptSubmit', 'WORKING'), ('PermissionRequest', 'WAITING_USER'),

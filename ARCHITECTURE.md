@@ -12,7 +12,7 @@ IDs, event names, safe tool names, state, and timestamps, not prompt/tool bodies
 Claude lifecycle.py ────────┐
                             ├─ StateManager ─ SQLite ─ Server ─ Browser panel
 Opt-in Codex rollout tail ─┘                        │
-                                                   └─ delayed browser opener
+                                                   └─ non-modal opt-in invitation
 Explicit local import ─ Parser / extractor ─ Timeline ─ filtered cards
                                              └─ exact record hash + line reference
 ```
@@ -23,12 +23,12 @@ Explicit local import ─ Parser / extractor ─ Timeline ─ filtered cards
 |---|---|
 | `demo/app.py` | Start/stop/open/import/status/synthetic smoke CLI |
 | `demo/hooks/` | Passive Claude plugin contract; no policy decisions |
-| `core/state_manager.py` | Transactional per-provider/session turn state; panel debounce |
+| `core/state_manager.py` | Transactional per-provider/session turn state; invitation eligibility |
 | `core/codex_watcher.py` | Read-only bounded JSONL tail; explicit experimental compatibility |
 | `core/history_parser.py` | Parse, exclude instructions/secret patterns, extract, deduplicate, filter, verify |
 | `core/chronicles.py` | Read-only topic classification, deduplicated inventory, sourced chapters and full chronology |
 | `core/store.py` | Private SQLite schema, settings, derived-history deletion |
-| `demo/server.py` | Loopback API, authentication, safe static allowlist, opener worker |
+| `demo/server.py` | Loopback API, authentication, safe static allowlist, passive observer worker |
 | `demo/ui/web/` | Framework-free accessible tabs, filters, evidence dialog, controls |
 | `experiments/` | Synthetic regression / private evidence audit utilities |
 
@@ -86,12 +86,21 @@ synchronous and bounded to reduce this risk, not claimed to eliminate it.
 SQLite writes are short transactions with a timeout. No schema is written to a
 host-owned database. A Unix lock prevents duplicate services on one data store.
 
-At five elapsed seconds of WORKING, the service claims one open per turn. An
-already-connected page updates without another browser launch; otherwise it
-requests an OS browser open, at most once per ten seconds globally. A false or
-blocked OS browser launch is not proof that a panel was actually seen. Closing
-content suppresses it for the page's known turns; disabling auto-show persists
-across service restarts. No window is focused on completion.
+At five elapsed seconds of non-stale WORKING, `panel_due` makes a turn eligible
+for an invitation, never an automatic open. The observer does not launch windows.
+The reading panel starts collapsed; only a user click enters. The page aggregates
+concurrent eligible turns into a non-modal corner invitation, with entry/decline
+buttons. Turn keys offered in this tab are deduplicated across reloads in bounded
+session storage; closing content also suppresses the currently observed turns.
+Disabling the legacy `auto_show` setting suppresses invitations across restarts.
+The legacy `opened_turn` column remains for schema compatibility, but the old
+transactional open-claim path is removed.
+
+With explicit browser-notification permission, a live background page may send
+a dismissible invitation; only its still-current click may focus the page.
+No permission is requested automatically, no service worker/native notification
+bridge is installed, and closed/frozen pages cannot guarantee delivery. Completion
+does not focus or reopen anything. CLI `open` / `--open` is an explicit user action.
 
 ## Recovery and compatibility
 

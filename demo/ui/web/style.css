@@ -10,3 +10,4 @@
 .markdown .format-note{font-size:10px;color:#8a977f;border-top:1px solid #e6ecdf;padding-top:8px;margin-top:15px}
 
 .card-body{min-width:0}
+.wait-invitation{position:fixed;right:24px;bottom:24px;z-index:10;width:min(350px,calc(100vw - 36px));max-height:calc(100dvh - 48px);overflow:auto;padding:23px;background:#fff;border:1px solid #d4dfcc;border-radius:14px;box-shadow:0 8px 40px #344c3220}.wait-invitation .eyebrow{font-size:9px;margin-bottom:12px}.wait-invitation>strong{font-family:Georgia,"Songti SC",serif;font-size:19px;font-weight:550}.wait-invitation>p:not(.eyebrow){font-size:12px;line-height:1.9;overflow-wrap:anywhere}.wait-invitation .subtle{font-size:10px}.invitation-actions{display:flex;gap:10px;align-items:center;margin-top:17px;flex-wrap:wrap}.invitation-enter{padding:11px 16px;border-radius:7px;background:var(--green);color:#fff;font-size:12px}.invitation-enter:hover{background:#274b3c}@media(max-width:720px){.wait-invitation{right:18px;bottom:18px}}

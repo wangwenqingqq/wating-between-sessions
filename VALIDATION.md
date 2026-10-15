@@ -1,4 +1,33 @@
-# Validation and evidence ledger — 2026-10-14
+# Validation and evidence ledger
+
+## Opt-in waiting revision — 2026-10-15
+
+The original auto-open contract below is historical and superseded. The current
+contract is a five-second **invitation**, not a window/panel open. Backend ticks
+must never call the browser opener; content starts collapsed and only explicit
+entry clicks expand it. Declining/closing suppresses the observed turns, including
+tab reloads; concurrent turns share one corner invitation. Disabled, stale,
+completed or waiting-for-input turns retire invitations without taking focus.
+Optional background browser notifications require prior permission and a live
+page; a still-current notification click is the only notification focus path.
+
+Regressions cover threshold/tool-timer stability, observer non-launch behavior,
+non-modal entry/decline, per-turn reload deduplication, aggregation/retirement,
+permission gating, stale/frozen-tab notification clicks (including a fresh server
+check and cancellation during that request), and the full poll/completion path.
+The synthetic benchmark now counts invitation-eligible turns, not automatic opens.
+The revision passed 37 Python and 20 Node tests, compilation/syntax checks, and
+30 synthetic scenarios / 180 state assertions / 30 invitation-eligible turns.
+In the live local browser, a working session produced a corner invitation while
+content stayed hidden and focus remained outside it. Declining then reloading
+did not repeat it; explicit entry restored the 12-topic / 223-record shelf.
+Desktop and 390-pixel-wide layouts had no horizontal overflow. Native notification
+permission was not granted during QA: click/expiry behavior is mocked-test evidence,
+not observed macOS delivery.
+Browser/OS notification delivery with a closed/frozen page remains unaccepted;
+there is no native notification daemon or user-outcome claim.
+
+## Original implementation record — 2026-10-14
 
 ## Contract
 

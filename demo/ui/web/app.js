@@ -4,7 +4,9 @@ const fragment = location.hash.slice(1);
 if (fragment) { sessionStorage.setItem('awe-key', fragment); history.replaceState(null, '', '/'); }
 const token = sessionStorage.getItem('awe-key') || '';
 let mode = 'timeline', state = null, inventory = '', signalCursor = null;
-let dismissed = new Set(), panelClosed = false, loading = false;
+let panelClosed = true, loading = false, invitationTurns = [], invitationNotification = null;
+let offered = new Set();
+try { offered = new Set(JSON.parse(sessionStorage.getItem('awe-invited') || '[]')); } catch (_) { /* A damaged tab cache must not prevent entry. */ }
 let sessionsExpanded = false, sessionInventory = '';
 let chronicleData = null, selectedTopic = '', chronicleDomain = '', chronicleKind = '', contentRequest = 0;
 const kinds = {request:'当时的请求', reported_result:'助手自报结果 · 未独立验证', decision:'用户明确选择', open_question:'当时尚未解决'};
@@ -46,9 +48,59 @@ async function hydrateMarkdown(body){
   catch(_){markdownCache.delete(key);if(state?.history_enabled&&body.isConnected)job.apply(job.event.summary,true);}
 }
 function empty(text) { $('cards').replaceChildren(element('div',text,'empty')); }
-function closePanel() { panelClosed=true; $('panel').hidden=true; $('panel-reopen').hidden=false; if(state)state.sessions.forEach(s=>dismissed.add(s.id+':'+s.turn_id)); }
-function openPanel() { panelClosed=false; $('panel').hidden=false; $('panel-reopen').hidden=true; }
+const turnKey = (s) => s.id+':'+s.turn_id;
+function rememberOffers(sessions) {
+  if(sessions.every(s=>offered.has(turnKey(s))))return;
+  for(const session of sessions)offered.add(turnKey(session));
+  // Keep only a bounded tab-local history, never write chat identifiers to a remote service.
+  offered=new Set([...offered].slice(-200));
+  try { sessionStorage.setItem('awe-invited',JSON.stringify([...offered])); } catch (_) { /* In-memory deduplication still works without tab storage. */ }
+}
+function hideInvitation() {
+  $('wait-invitation').hidden=true;invitationTurns=[];
+  invitationNotification?.close();invitationNotification=null;
+}
+function closePanel() {
+  panelClosed=true;$('panel').hidden=true;$('panel-reopen').hidden=false;$('panel-close').hidden=true;
+  if(state)rememberOffers(state.sessions);hideInvitation();
+}
+function openPanel() {
+  panelClosed=false;$('panel').hidden=false;$('panel-reopen').hidden=true;$('panel-close').hidden=false;
+  if(state)rememberOffers(state.sessions);hideInvitation();loadCards();
+}
+function updateInvitation() {
+  const eligible=state?.auto_show?state.sessions.filter(s=>s.panel_due):[];
+  if(!panelClosed){rememberOffers(eligible);hideInvitation();return;}
+  invitationTurns=invitationTurns.filter(key=>eligible.some(s=>turnKey(s)===key));
+  if(!invitationTurns.length)hideInvitation();
+  const fresh=eligible.filter(s=>!offered.has(turnKey(s)));
+  if(fresh.length){invitationTurns.push(...fresh.map(turnKey));rememberOffers(fresh);}
+  if(!invitationTurns.length)return;
+  const firstShow=$('wait-invitation').hidden;
+  const sessions=eligible.filter(s=>invitationTurns.includes(turnKey(s)));
+  $('wait-invitation-text').textContent=(sessions[0].project_name||(sessions[0].provider==='demo'?'模拟演示（非真实任务）':'Agent'))+(sessions.length>1?` 等 ${sessions.length} 个会话`:'')+' 还在工作。要进来看看吗？';
+  $('wait-invitation').hidden=false;
+  if(firstShow&&document.visibilityState==='hidden'&&'Notification'in window&&Notification.permission==='granted'){
+    try {
+      const notification=invitationNotification=new Notification('Between · 等候之间',{body:'Agent 还在工作。点击进入等待空间，也可以忽略。',tag:'between-wait-invitation',silent:true});
+      notification.onclick=async()=>{
+        if(invitationNotification!==notification||!panelClosed||$('wait-invitation').hidden||!state?.auto_show||!state.sessions.some(s=>s.panel_due&&invitationTurns.includes(turnKey(s))))return;
+        const turns=[...invitationTurns];
+        try {
+          // A background tab's last poll may predate completion or an opt-out.
+          const latest=await api('state');
+          if(invitationNotification!==notification||!panelClosed||$('wait-invitation').hidden)return;
+          if(!latest.auto_show||!latest.sessions.some(s=>s.panel_due&&turns.includes(turnKey(s)))){hideInvitation();return;}
+          state=latest;window.focus();openPanel();
+        } catch (_) {
+          if(invitationNotification===notification){hideInvitation();showError('无法确认当前会话状态，未进入等待空间。你可以稍后手动进入。');}
+        }
+      };
+    } catch (_) { /* The non-modal page invitation remains available. */ }
+  }
+}
 $('panel-close').onclick=closePanel; $('panel-reopen').onclick=openPanel;
+$('wait-enter').onclick=openPanel;$('wait-dismiss').onclick=hideInvitation;
 $('session-toggle').onclick=()=>{
   sessionsExpanded=!sessionsExpanded;$('session-list').hidden=!sessionsExpanded;
   $('session-toggle').setAttribute('aria-expanded',String(sessionsExpanded));renderSessions();
@@ -87,6 +139,7 @@ async function loadCards() {
     const target=mode==='timeline'?$('chronicles'):$('cards');
     target.append(element('div','历史分析已关闭。你仍可以展开上方的会话列表；需要时在隐私设置中重新启用。','empty'));return;
   }
+  if(panelClosed)return;
   try {
     if(mode==='timeline'){
       const data=await api('chronicles?'+new URLSearchParams({month:$('month').value,topic:selectedTopic}));
@@ -212,7 +265,7 @@ async function poll() {
     const active=state.sessions.filter(s=>['WORKING','WAITING_USER'].includes(s.state));
     const current=active.find(s=>s.state==='WAITING_USER')||active[0]||state.sessions[0];
     $('status-title').textContent=current?(labels[current.state]+(active.length>1?` · ${active.length} 个会话`:'')):'等待你的下一个任务';
-    $('status-detail').textContent=current?(current.stale?'信号暂未更新，状态不确定':current.provider.toUpperCase()+' · '+current.detail):'连接已就绪。超过 5 秒的工作会自动展示，不代你授权。';
+    $('status-detail').textContent=current?(current.stale?'信号暂未更新，状态不确定':current.provider.toUpperCase()+' · '+current.detail):'连接已就绪。等待超过 5 秒时轻声邀请，由你决定是否进入。';
     $('status-dot').className='status-dot'+(current?.state==='WORKING'?' working':current?.state==='WAITING_USER'?' attention':'');
     $('elapsed').textContent=current&&active.length?duration(current.elapsed):'已就绪';
     renderSessions();
@@ -225,10 +278,7 @@ async function poll() {
       if(state.months.includes(selected))$('month').value=selected;
       await loadCards();
     }
-    for(const s of state.sessions){
-      const key=s.id+':'+s.turn_id;
-      if(s.panel_due&&state.auto_show&&!dismissed.has(key)&&panelClosed)openPanel();
-    }
+    updateInvitation();
     for(const signal of state.signals){
       if(signal.state!=='WAITING_USER'||state.sessions.some(s=>s.id===signal.id&&s.turn_id===signal.turn_id&&s.state==='WAITING_USER'))announce(signal);
     }
@@ -253,6 +303,6 @@ $('delete-history').onclick=async()=>{
 };
 $('notify-enable').onclick=async()=>{
   if(!('Notification'in window)){$('notify-status').textContent='此浏览器不支持系统通知，仍会显示页内提醒。';return;}
-  const result=await Notification.requestPermission();$('notify-status').textContent=result==='granted'?'已允许：页面在后台时发送完成提醒。':'未获授权：仍会显示页内提醒。';
+  const result=await Notification.requestPermission();$('notify-status').textContent=result==='granted'?'已允许：页面在后台时发送可忽略的等待邀请和完成提醒，不自动打开或抢焦点。':'未获授权：仍会显示页内提醒。';
 };
 poll();setInterval(poll,1000);

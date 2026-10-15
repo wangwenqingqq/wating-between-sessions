@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 
-function setup() {
+function setup(storage=new Map()) {
   const nodes = new Map();
   const element = (tag='div') => ({tagName:tag.toUpperCase(),children: [],
     append(...items) { this.children.push(...items); }, replaceChildren() { this.children = []; },
@@ -21,11 +21,132 @@ function setup() {
     createElement: element,
     querySelectorAll: () => [],
   };
-  const context = vm.createContext({document, URL, atob, location: {hash: ''}, sessionStorage: {getItem: () => ''},
+  document.visibilityState='visible';
+  document.activeElement={id:'existing-focus'};
+  const context = vm.createContext({document, URL, atob, location: {hash: ''},
+    sessionStorage: {getItem:key=>storage.get(key)||'',setItem:(key,value)=>storage.set(key,value)},
+    Option:function(text,value){return {textContent:text,value};},focusCalls:0,
+    focus(){this.focusCalls++;},open(){throw new Error('Unsolicited window open');},
     fetch: () => new Promise(() => {}), setInterval() {}});
+  context.window=context;
   for(const file of ['vendor/markdown-it.min.js','markdown.js','app.js'])vm.runInContext(fs.readFileSync(path.join(__dirname, '../demo/ui/web',file), 'utf8'), context);
+  document.getElementById('panel').hidden=true;
+  document.getElementById('wait-invitation').hidden=true;
   return {nodes,context};
 }
+
+function waiting(context, overrides={}) {
+  context.fixture={auto_show:true,history_enabled:false,sessions:[{id:'codex:a',turn_id:'one',state:'WORKING',panel_due:true,project_name:'Project A'}],...overrides};
+  vm.runInContext('state=fixture;updateInvitation();',context);
+}
+
+test('Waiting only offers a non-modal choice, never opens content or takes focus', () => {
+  const {nodes,context}=setup(),focus=context.document.activeElement;
+  let permissionRequests=0,notifications=0;
+  context.document.visibilityState='hidden';
+  context.Notification=class {static permission='default';constructor(){notifications++;}static requestPermission(){permissionRequests++;}};
+  waiting(context,{sessions:[{id:'codex:a',turn_id:'one',panel_due:false}]});
+  assert.equal(nodes.get('wait-invitation').hidden,true);
+  waiting(context);
+  assert.equal(nodes.get('wait-invitation').hidden,false);
+  assert.match(nodes.get('wait-invitation-text').textContent,/Project A/);
+  assert.equal(nodes.get('panel').hidden,true);
+  assert.equal(context.document.activeElement,focus);
+  assert.equal(context.focusCalls,0);assert.equal(permissionRequests,0);assert.equal(notifications,0);
+  const html=fs.readFileSync(path.join(__dirname,'../demo/ui/web/index.html'),'utf8');
+  assert.match(html,/<aside id="wait-invitation"[^>]+hidden>/);
+  assert.match(html,/<section id="panel" hidden>/);
+  assert.doesNotMatch(html,/<dialog[^>]+wait-invitation/);
+});
+
+test('Declining suppresses the same turn across polls and reloads; a new turn may invite', () => {
+  const storage=new Map(),first=setup(storage);
+  waiting(first.context);first.nodes.get('wait-dismiss').onclick();
+  waiting(first.context);assert.equal(first.nodes.get('wait-invitation').hidden,true);
+  const second=setup(storage);waiting(second.context);
+  assert.equal(second.nodes.get('wait-invitation').hidden,true);
+  waiting(second.context,{sessions:[{id:'codex:a',turn_id:'two',panel_due:true}]});
+  assert.equal(second.nodes.get('wait-invitation').hidden,false);
+  assert.equal(second.nodes.get('panel').hidden,true);
+  second.nodes.get('wait-enter').onclick();
+  assert.equal(second.nodes.get('panel').hidden,false);
+  assert.equal(second.nodes.get('wait-invitation').hidden,true);
+  second.nodes.get('panel-close').onclick();waiting(second.context,{sessions:[{id:'codex:a',turn_id:'two',panel_due:true}]});
+  assert.equal(second.nodes.get('wait-invitation').hidden,true);
+  assert.equal(second.nodes.get('panel').hidden,true);
+});
+
+test('Concurrent turns share one invitation; disabled or no-longer-working turns retire it', () => {
+  const {nodes,context}=setup();
+  const sessions=[{id:'codex:a',turn_id:'one',panel_due:true,project_name:'A'},{id:'codex:b',turn_id:'one',panel_due:true}];
+  waiting(context,{sessions});assert.match(nodes.get('wait-invitation-text').textContent,/2 个会话/);
+  waiting(context,{sessions,auto_show:false});assert.equal(nodes.get('wait-invitation').hidden,true);
+  waiting(context,{sessions});assert.equal(nodes.get('wait-invitation').hidden,true);
+  waiting(context,{sessions:[{id:'codex:c',turn_id:'one',panel_due:true}]});
+  assert.equal(nodes.get('wait-invitation').hidden,false);
+  for(const state of ['WAITING_USER','COMPLETED','FAILED','WORKING']){
+    waiting(context,{sessions:[{id:'codex:c',turn_id:'one',state,panel_due:false,stale:true}]});
+    assert.equal(nodes.get('wait-invitation').hidden,true);assert.equal(nodes.get('panel').hidden,true);
+  }
+});
+
+test('Background toast is permission-gated, deduplicated, and enters only on a current click', async () => {
+  const {nodes,context}=setup(),notifications=[];
+  context.fetch=async()=>({ok:true,json:async()=>context.fixture});
+  context.document.visibilityState='hidden';
+  context.Notification=class {static permission='granted';constructor(title,options){this.title=title;this.options=options;notifications.push(this);}close(){this.closed=true;}};
+  waiting(context);waiting(context);
+  assert.equal(notifications.length,1);assert.equal(context.focusCalls,0);assert.equal(nodes.get('panel').hidden,true);
+  const expired=notifications[0];
+  waiting(context,{sessions:[{id:'codex:a',turn_id:'one',panel_due:false,state:'COMPLETED'}]});
+  assert.equal(expired.closed,true);await expired.onclick();
+  assert.equal(context.focusCalls,0);
+  waiting(context,{sessions:[{id:'codex:a',turn_id:'two',panel_due:true}]});
+  await expired.onclick();assert.equal(context.focusCalls,0);
+  await notifications[1].onclick();
+  assert.equal(context.focusCalls,1);assert.equal(nodes.get('panel').hidden,false);assert.equal(notifications[1].closed,true);
+});
+
+test('Frozen-tab notifications recheck the server and reject completed, disabled or unreachable turns', async () => {
+  for(const outcome of ['completed','disabled','new-turn','offline']){
+    const {nodes,context}=setup();let notification,requests=0;
+    context.document.visibilityState='hidden';
+    context.Notification=class {static permission='granted';constructor(){notification=this;}close(){}};
+    waiting(context);
+    context.fetch=async url=>{
+      assert.equal(url,'/api/state');requests++;
+      if(outcome==='offline')throw new Error('Offline');
+      return {ok:true,json:async()=>({auto_show:outcome!=='disabled',sessions:[{id:'codex:a',turn_id:outcome==='new-turn'?'two':'one',panel_due:outcome!=='completed'}]})};
+    };
+    await notification.onclick();
+    assert.equal(requests,1);assert.equal(context.focusCalls,0);assert.equal(nodes.get('panel').hidden,true);
+    assert.equal(nodes.get('wait-invitation').hidden,true);
+  }
+});
+
+test('Decline during an in-flight invitation click cannot focus or enter later', async () => {
+  const {nodes,context}=setup();let notification,resolve;
+  context.document.visibilityState='hidden';
+  context.Notification=class {static permission='granted';constructor(){notification=this;}close(){}};
+  waiting(context);context.fetch=()=>new Promise(r=>{resolve=r;});
+  const pending=notification.onclick();nodes.get('wait-dismiss').onclick();
+  resolve({ok:true,json:async()=>context.fixture});await pending;
+  assert.equal(context.focusCalls,0);assert.equal(nodes.get('panel').hidden,true);
+});
+
+test('Real polling and completion cannot reopen collapsed content or load private reading cards', async () => {
+  const {nodes,context}=setup(),focus=context.document.activeElement;
+  let next={auto_show:true,history_enabled:true,sessions:[{id:'codex:a',provider:'codex',turn_id:'one',state:'WORKING',panel_due:true,elapsed:10}],months:[],events:0,histories:0,signals:[],next_signal:1};
+  context.fetch=async url=>{assert.match(url,/^\/api\/state/);return {ok:true,json:async()=>next};};
+  await vm.runInContext('loading=false;poll();',context);
+  assert.equal(nodes.get('panel').hidden,true);assert.equal(nodes.get('wait-invitation').hidden,false);
+  nodes.get('wait-dismiss').onclick();await vm.runInContext('poll()',context);
+  assert.equal(nodes.get('wait-invitation').hidden,true);
+  next={...next,sessions:[{...next.sessions[0],state:'COMPLETED',panel_due:false}],signals:[{id:'codex:a',turn_id:'one',state:'COMPLETED'}],next_signal:2};
+  await vm.runInContext('poll()',context);
+  assert.equal(nodes.get('notice').hidden,false);assert.equal(nodes.get('panel').hidden,true);
+  assert.equal(context.document.activeElement,focus);assert.equal(context.focusCalls,0);
+});
 
 test('Status list keeps project names and prioritizes active sessions', () => {
   const {nodes,context}=setup();

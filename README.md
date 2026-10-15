@@ -5,7 +5,7 @@ API, third-party Python package, telemetry, or host source modification is neede
 The interface is in Chinese; project documentation is in English.
 
 **Implemented:** lifecycle state machine, five-second delayed display, Timeline /
-Discovery / Progress, non-interrupting completion notices, per-session isolation,
+Discovery, collapsible live sessions, non-interrupting completion notices, per-session isolation,
 local import/deduplication, source-record verification, and privacy controls.
 **Not yet accepted:** 30 real host-task accuracy trials, a human semantic audit of
 50 events, live Claude Code execution, and the user study. Synthetic tests do not
@@ -62,11 +62,23 @@ only fixture/subprocess validation, not live-host acceptance. See the
 
 ### Codex compatibility boundary
 
-Progress cards show the session/project name before the lifecycle status. For
+The status strip opens a collapsible session list, separate from the reading
+panel. Active and waiting sessions come first; recent observed sessions remain
+available below. Project names precede lifecycle states. For
 Codex this prefers the matching title in the local `session_index.jsonl` beside
 the rollout directory, falling back to the session's working-directory basename.
 Claude Hooks use the working-directory basename. Unknown names are labeled
 explicitly; no full working-directory path is added to state storage or display.
+
+Click a supported local Codex session to open its matching chat in the installed
+ChatGPT desktop app. The link uses the documented
+[`codex://threads/<thread-id>` scheme](https://learn.chatgpt.com/docs/reference/commands#deep-links)
+and accepts only UUID-shaped Codex IDs. It only navigates: no prompt, approval,
+resume command, or model API is sent. Other providers or unsupported IDs show
+status only. The desktop app and its URL handler must be installed; browser/OS
+confirmation may be required. This does not add cloud-chat or remote-host
+discovery. The observer's latest 100 stored sessions are shown; collapsing this
+list does not collapse the reading panel, and vice versa.
 
 `--watch-codex` is an **experimental read-only rollout adapter**, not an installed
 Codex hook or stable public API. It observes explicit local `task_started`,
@@ -144,7 +156,7 @@ automatically. There is no percentage-progress estimate.
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q demo experiments tests
 node --check demo/ui/web/app.js   # Optional Node.js syntax check
-node --test tests/test_ui.cjs     # Optional Node.js Progress rendering regression
+node --test tests/test_ui.cjs     # Optional Node.js UI and session-link regressions
 python3 experiments/benchmark.py # 30 SYNTHETIC scenarios, not 30 real tasks
 python3 experiments/evaluate_history.py
 python3 demo/app.py simulate --seconds 8  # Clearly labeled synthetic UI smoke test

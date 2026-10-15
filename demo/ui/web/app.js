@@ -5,6 +5,7 @@ if (fragment) { sessionStorage.setItem('awe-key', fragment); history.replaceStat
 const token = sessionStorage.getItem('awe-key') || '';
 let mode = 'timeline', state = null, inventory = '', signalCursor = null;
 let dismissed = new Set(), panelClosed = false, loading = false;
+let sessionsExpanded = false, sessionInventory = '';
 let chronicleData = null, selectedTopic = '', chronicleDomain = '', chronicleKind = '', contentRequest = 0;
 const kinds = {request:'当时的请求', reported_result:'助手自报结果 · 未独立验证', decision:'用户明确选择', open_question:'当时尚未解决'};
 const categories = {research:'研究',engineering:'工程',learning:'学习',general:'日常'};
@@ -21,6 +22,10 @@ function empty(text) { $('cards').replaceChildren(element('div',text,'empty')); 
 function closePanel() { panelClosed=true; $('panel').hidden=true; $('panel-reopen').hidden=false; if(state)state.sessions.forEach(s=>dismissed.add(s.id+':'+s.turn_id)); }
 function openPanel() { panelClosed=false; $('panel').hidden=false; $('panel-reopen').hidden=true; }
 $('panel-close').onclick=closePanel; $('panel-reopen').onclick=openPanel;
+$('session-toggle').onclick=()=>{
+  sessionsExpanded=!sessionsExpanded;$('session-list').hidden=!sessionsExpanded;
+  $('session-toggle').setAttribute('aria-expanded',String(sessionsExpanded));renderSessions();
+};
 $('notice-dismiss').onclick=()=>{$('notice').hidden=true;};
 for (const dialog of document.querySelectorAll('dialog')) dialog.querySelector('.dialog-close').onclick=()=>dialog.close();
 $('settings-open').onclick=()=>$('settings-dialog').showModal();
@@ -44,12 +49,12 @@ async function source(event, card=null) {
   } catch(error) { showError(error.message); }
 }
 async function loadCards() {
-  if(mode==='progress'||!state)return;
+  if(!state)return;
   const request=++contentRequest,requestedMode=mode;
   if(!state.history_enabled){
     chronicleData=null;$('chronicles').replaceChildren();$('cards').replaceChildren();
     const target=mode==='timeline'?$('chronicles'):$('cards');
-    target.append(element('div','历史分析已关闭。你仍可以查看 Progress；需要时在隐私设置中重新启用。','empty'));return;
+    target.append(element('div','历史分析已关闭。你仍可以展开上方的会话列表；需要时在隐私设置中重新启用。','empty'));return;
   }
   try {
     if(mode==='timeline'){
@@ -130,13 +135,29 @@ function renderDossier(topic,root) {
   if(!records.children.length)records.append(element('div','这卷暂时没有这一类记录；没有证据时，我们保留空白。','empty'));
   root.append(records);
 }
-function progress() {
-  const box=$('progress');box.replaceChildren();
-  if(!state.sessions.length){box.append(element('p','暂无生命周期事件。启动带插件的 Agent，或启用只读 Codex 适配器。','empty'));return;}
-  for(const session of state.sessions){
-    const card=element('article','','session');
+function sessionUrl(session) {
+  const match=session.provider==='codex'&&/^codex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(session.id);
+  return match?'codex://threads/'+match[1]:'';
+}
+function renderSessions() {
+  if(!state)return;
+  const priority={WAITING_USER:0,WORKING:1,FAILED:2,COMPLETED:3,IDLE:4};
+  const sessions=[...state.sessions].sort((a,b)=>(priority[a.state]??5)-(priority[b.state]??5)||(b.started||0)-(a.started||0)||a.id.localeCompare(b.id));
+  $('session-toggle').textContent=(sessionsExpanded?'收起会话':'展开会话')+' · '+sessions.length+(sessionsExpanded?' ▴':' ▾');
+  // Tool/elapsed ticks must not recreate focused links or collapse the list.
+  const next=JSON.stringify(sessions.map(s=>[s.id,s.provider,s.project_name,s.state,s.stale]));
+  if(next===sessionInventory)return;sessionInventory=next;
+  const box=$('session-list');box.replaceChildren();
+  box.append(element('p','点击会话可回到本地 ChatGPT；只打开会话，不发送消息或代你授权。','session-hint'));
+  if(!sessions.length){box.append(element('p','暂无会话信号。启动 Agent 后，会在这里显示。','empty'));return;}
+  for(const session of sessions){
+    const url=sessionUrl(session),card=element(url?'a':'article','','session'+(url?' session-link':''));
     const name=session.project_name||(session.provider==='demo'?'模拟演示':'未命名项目');
-    card.append(element('strong',name+' · '+labels[session.state]+' · '+session.provider),element('p',session.stale?'信号超过 15 分钟未更新，状态不确定；不会擅自判断失败。':session.detail),element('small',session.id+' · '+session.event));
+    if(url){card.setAttribute('href',url);card.setAttribute('aria-label','在 ChatGPT 打开 '+name+' 会话（'+session.id.slice(6,14)+'）');}
+    const copy=element('div','','session-copy');
+    copy.append(element('strong',name+' · '+(labels[session.state]||session.state)),element('small',session.provider.toUpperCase()+' · '+session.id.split(':').slice(1).join(':').slice(0,8)));
+    if(session.stale)copy.append(element('p','信号超过 15 分钟未更新，状态不确定。'));
+    card.append(copy,element('span',url?'在 ChatGPT 打开 ↗':'仅状态 · 暂不支持跳转','session-action'));
     box.append(card);
   }
 }
@@ -161,6 +182,7 @@ async function poll() {
     $('status-detail').textContent=current?(current.stale?'信号暂未更新，状态不确定':current.provider.toUpperCase()+' · '+current.detail):'连接已就绪。超过 5 秒的工作会自动展示，不代你授权。';
     $('status-dot').className='status-dot'+(current?.state==='WORKING'?' working':current?.state==='WAITING_USER'?' attention':'');
     $('elapsed').textContent=current&&active.length?duration(current.elapsed):'已就绪';
+    renderSessions();
     if(active.length)document.title=(current.state==='WAITING_USER'?'需要确认':`${active.length} 个会话工作中`)+' · Between';
     $('inventory').textContent=`${state.histories} 段会话 · ${state.events} 个片段`;
     const nextInventory=JSON.stringify([state.events,state.histories,state.history_enabled,state.months]);
@@ -178,16 +200,15 @@ async function poll() {
       if(signal.state!=='WAITING_USER'||state.sessions.some(s=>s.id===signal.id&&s.turn_id===signal.turn_id&&s.state==='WAITING_USER'))announce(signal);
     }
     signalCursor=state.next_signal;
-    if(mode==='progress')progress();
   }catch(error){showError(error.message+'。若服务重启，请运行 python3 demo/app.py open 重新连接。');}
   finally{loading=false;}
 }
 for(const button of document.querySelectorAll('.tab'))button.onclick=()=>{
   mode=button.dataset.mode;
   document.querySelectorAll('.tab').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',String(b===button));});
-  $('filters').hidden=mode==='progress';$('cards').hidden=mode!=='discovery';$('chronicles').hidden=mode!=='timeline';$('progress').hidden=mode!=='progress';$('category-filter').hidden=mode!=='discovery';
+  $('cards').hidden=mode!=='discovery';$('chronicles').hidden=mode!=='timeline';$('category-filter').hidden=mode!=='discovery';
   $('content-hint').textContent=mode==='discovery'?'仅展示当时明确的未解决记录，当前是否解决仍需核实。':'以课题为卷，沿着原文回看。';
-  if(mode==='progress')progress();else loadCards();
+  loadCards();
 };
 $('month').onchange=loadCards;$('topic').onchange=loadCards;
 for(const [id,key]of[['auto-show','auto_show'],['history-enabled','history_enabled']])$(id).onchange=async()=>{

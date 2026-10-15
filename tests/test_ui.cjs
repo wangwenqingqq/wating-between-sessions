@@ -27,18 +27,59 @@ function setup() {
   return {nodes,context};
 }
 
-test('Progress prefixes each status with its own project name', () => {
+test('Status list keeps project names and prioritizes active sessions', () => {
   const {nodes,context}=setup();
   vm.runInContext(`state = {sessions: [
-    {project_name: 'Alpha', state: 'COMPLETED', provider: 'codex'},
-    {project_name: 'Beta', state: 'WORKING', provider: 'claude'},
-    {state: 'COMPLETED', provider: 'codex'},
-    {state: 'COMPLETED', provider: 'demo'}
-  ]}; progress();`, context);
-  assert.deepEqual(nodes.get('progress').children.map(card => card.children[0].textContent), [
-    'Alpha · 本轮执行已结束 · codex', 'Beta · Agent 正在工作 · claude',
-    '未命名项目 · 本轮执行已结束 · codex', '模拟演示 · 本轮执行已结束 · demo',
+    {id:'codex:a',project_name: 'Alpha', state: 'COMPLETED', provider: 'codex'},
+    {id:'claude:b',project_name: 'Beta', state: 'WORKING', provider: 'claude'},
+    {id:'codex:e',project_name: 'Needs input', state: 'WAITING_USER', provider: 'codex'},
+    {id:'codex:c',state: 'COMPLETED', provider: 'codex'},
+    {id:'demo:d',state: 'COMPLETED', provider: 'demo'}
+  ]}; renderSessions();`, context);
+  assert.deepEqual(nodes.get('session-list').children.filter(e=>e.className==='session'||e.className==='session session-link').map(card => card.children[0].children[0].textContent), [
+    'Needs input · Agent 需要你的确认', 'Beta · Agent 正在工作', 'Alpha · 本轮执行已结束',
+    '未命名项目 · 本轮执行已结束', '模拟演示 · 本轮执行已结束',
   ]);
+});
+
+test('Only strict local Codex UUIDs become ChatGPT deep links', () => {
+  const {nodes,context}=setup();
+  const id='00000000-0000-4000-8000-000000000001';
+  context.sessionID=id;
+  assert.equal(vm.runInContext("sessionUrl({provider:'codex',id:'codex:'+sessionID})",context),'codex://threads/'+id);
+  for(const [provider,session] of [['claude','codex:'+id],['demo','codex:'+id],['codex','codex:javascript:alert(1)'],['codex','codex:'+id+'?prompt=send'],['codex','codex:../../settings'],['codex',id]]){
+    context.fixture={provider,id:session};assert.equal(vm.runInContext('sessionUrl(fixture)',context),'');
+  }
+  vm.runInContext("state={sessions:[{id:'codex:'+sessionID,provider:'codex',state:'WORKING',project_name:'<img onerror=bad>',stale:true}]};renderSessions();",context);
+  const row=nodes.get('session-list').children[1];
+  assert.equal(row.tagName,'A');assert.equal(row.href,'codex://threads/'+id);
+  assert.equal(row.children[0].children[0].textContent,'<img onerror=bad> · Agent 正在工作');
+  assert.match(row.children[0].children[2].textContent,/不确定/);
+});
+
+test('Session list expands independently and preserves links on tool ticks', () => {
+  const {nodes,context}=setup();
+  vm.runInContext("state={sessions:[{id:'codex:s',provider:'codex',state:'WORKING',project_name:'Project'}]};renderSessions();",context);
+  const button=nodes.get('session-toggle'),list=nodes.get('session-list');
+  button.onclick();assert.equal(button['aria-expanded'],'true');assert.equal(list.hidden,false);
+  const row=list.children[1];
+  vm.runInContext("state.sessions[0].detail='PreToolUse';state.sessions[0].elapsed=20;renderSessions();",context);
+  assert.equal(list.children[1],row);assert.equal(list.hidden,false);
+  vm.runInContext("state.sessions[0].state='COMPLETED';renderSessions();",context);
+  assert.match(list.children[1].children[0].children[0].textContent,/本轮执行已结束/);assert.equal(list.hidden,false);
+  nodes.get('panel-close').onclick();assert.equal(nodes.get('panel').hidden,true);assert.equal(list.hidden,false);
+  button.onclick();assert.equal(button['aria-expanded'],'false');assert.equal(list.hidden,true);
+  vm.runInContext('state.sessions=[];renderSessions();',context);
+  assert.equal(list.children[1].className,'empty');
+});
+
+test('Only reading modes remain and sessions sit under the status strip', () => {
+  const html=fs.readFileSync(path.join(__dirname,'../demo/ui/web/index.html'),'utf8');
+  assert.deepEqual([...html.matchAll(/data-mode="([^"]+)"/g)].map(m=>m[1]),['timeline','discovery']);
+  assert.match(html,/id="session-toggle" aria-expanded="false" aria-controls="session-list"/);
+  assert.match(html,/id="session-list"[^>]+hidden/);
+  assert.ok(html.indexOf('id="session-list"')<html.indexOf('id="panel"'));
+  assert.ok(!html.includes('id="progress"'));
 });
 
 test('Chronicle shelves group topics without counting cross-references as new events', () => {

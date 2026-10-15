@@ -9,14 +9,15 @@
   <header><a class="brand" href="/">between<span>等候之间</span></a><div class="local"><i></i> 只在你的电脑上</div><button id="settings-open" class="quiet">隐私与设置</button></header>
   <main>
     <section class="intro"><div><p class="eyebrow">A LITTLE SPACE BETWEEN TASKS</p><h1>让等待，成为一次回望。</h1><p class="subtle">Agent 继续工作。你可以在这里，拾起曾经的想法。</p></div><div class="orbit" aria-hidden="true"><div></div><span>一段思考<br>正在继续</span></div></section>
-    <section class="status-strip" aria-live="polite"><div class="status-dot" id="status-dot"></div><div class="status-copy"><strong id="status-title">连接本地服务…</strong><span id="status-detail">不会读取推理内容，也不会代你授权。</span></div><span id="elapsed">—</span><button class="quiet" id="panel-close">收起内容</button></section>
+    <section class="status-strip" aria-live="polite"><div class="status-dot" id="status-dot"></div><div class="status-copy"><strong id="status-title">连接本地服务…</strong><span id="status-detail">不会读取推理内容，也不会代你授权。</span></div><span id="elapsed">—</span><div class="status-actions"><button class="quiet" id="session-toggle" aria-expanded="false" aria-controls="session-list">展开会话 ▾</button><button class="quiet" id="panel-close">收起内容</button></div></section>
+    <section id="session-list" class="session-list" aria-label="Agent 会话" hidden></section>
     <div id="notice" class="notice" role="status" hidden><span id="notice-text"></span><button id="notice-dismiss" class="quiet">知道了</button></div>
     <p id="connection-error" class="error" role="alert" hidden></p>
     <button id="panel-reopen" class="reopen" hidden>展开等待空间</button>
     <section id="panel">
-      <div class="content-header"><nav aria-label="内容模式"><button class="tab active" data-mode="timeline" aria-pressed="true">Timeline <span>编年史</span></button><button class="tab" data-mode="discovery" aria-pressed="false">Discovery <span>再发现</span></button><button class="tab" data-mode="progress" aria-pressed="false">Progress <span>当前动态</span></button></nav><span id="inventory" class="subtle"></span></div>
+      <div class="content-header"><nav aria-label="内容模式"><button class="tab active" data-mode="timeline" aria-pressed="true">Timeline <span>编年史</span></button><button class="tab" data-mode="discovery" aria-pressed="false">Discovery <span>再发现</span></button></nav><span id="inventory" class="subtle"></span></div>
       <div class="filters" id="filters"><label>月份 <select id="month"><option value="">全部月份</option></select></label><label id="category-filter" hidden>主题 <select id="topic"><option value="">全部主题</option><option value="research">研究</option><option value="engineering">工程</option><option value="learning">学习</option><option value="general">日常</option></select></label><span id="content-hint">以课题为卷，沿着原文回看。</span></div>
-      <section id="chronicles" aria-label="专题列传" aria-live="polite"></section><div id="cards" class="cards" aria-live="polite" hidden></div><div id="progress" hidden></div>
+      <section id="chronicles" aria-label="专题列传" aria-live="polite"></section><div id="cards" class="cards" aria-live="polite" hidden></div>
     </section>
     <footer><span>LOCAL FIRST · NO MODEL API · NO ANALYTICS</span><span>完成时轻声提醒，不打断你正在读的内容。</span></footer>
   </main>

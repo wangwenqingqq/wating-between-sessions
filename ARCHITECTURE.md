@@ -34,6 +34,13 @@ Explicit local import ─ Parser / extractor ─ Timeline ─ filtered cards
 
 Paths in this table are repository-relative for documentation only.
 
+Live sessions sit in a collapsible list below the status strip, not a reading tab.
+The UI creates only `codex://threads/<UUID>` navigation links for Codex sessions;
+other providers remain status-only. Opening a chat uses the desktop URL handler,
+not a new server-side shell endpoint or message/control channel. Session rows
+are retained across tool/elapsed ticks so polling does not repeatedly replace
+focused links. No conversation is automatically focused on lifecycle changes.
+
 The authenticated `/api/chronicles` route groups already-consented stored excerpts
 without reimporting histories, mutating evidence, or using a model API. Topics are
 keyword matches with research/general fallbacks. Cross-references are explicit;

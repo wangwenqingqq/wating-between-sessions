@@ -34,6 +34,19 @@ Explicit local import ─ Parser / extractor ─ Timeline ─ filtered cards
 
 Paths in this table are repository-relative for documentation only.
 
+`markdown.js` configures the vendored markdown-it browser bundle with raw HTML
+disabled, no image fetches, and an explicit link-scheme allowlist. Only this
+renderer produces history-related HTML. Existing normalized excerpts are not
+modified: `/api/source` additionally returns a bounded, layout-preserving
+Markdown excerpt after validating the same source line/hash and saved summary.
+If only an adjacent `.jsonl.zst` file remains, an optional installed `zstd`
+decoder streams its bytes into the identical checks, with a 16 MiB scan bound.
+No shell, unpacked copy, guessed Markdown boundaries or source-data write is used.
+An IntersectionObserver requests formatting for visible excerpts, deduplicates
+requests in page memory, and ignores detached or history-disabled targets.
+Source recovery is read-only and never marks a record read. The evidence dialog
+still rechecks the source on each explicit open.
+
 Live sessions sit in a collapsible list below the status strip, not a reading tab.
 The UI creates only `codex://threads/<UUID>` navigation links for Codex sessions;
 other providers remain status-only. Opening a chat uses the desktop URL handler,

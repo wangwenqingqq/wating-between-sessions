@@ -11,6 +11,13 @@ const kinds = {request:'当时的请求', reported_result:'助手自报结果 ·
 const categories = {research:'研究',engineering:'工程',learning:'学习',general:'日常'};
 const labels = {IDLE:'等待新任务',WORKING:'Agent 正在工作',WAITING_USER:'Agent 需要你的确认',COMPLETED:'本轮执行已结束',FAILED:'执行中断或失败'};
 const duration = (s) => s >= 60 ? `${Math.floor(s/60)} 分 ${Math.floor(s%60)} 秒` : `${Math.floor(s)} 秒`;
+const markdownCache=new Map(),markdownJobs=new WeakMap();
+const markdownObserver=typeof IntersectionObserver==='undefined'?null:new IntersectionObserver(entries=>{
+  for(const entry of entries){
+    if(entry.isIntersecting){markdownObserver.unobserve(entry.target);hydrateMarkdown(entry.target);}
+    else if(!entry.target.isConnected)markdownObserver.unobserve(entry.target);
+  }
+},{rootMargin:'160px'});
 
 async function api(path, data) {
   const response = await fetch('/api/' + path, {headers:{Authorization:'Bearer '+token, ...(data ? {'Content-Type':'application/json'} : {})}, method:data ? 'POST' : 'GET', body:data ? JSON.stringify(data) : undefined});
@@ -18,6 +25,26 @@ async function api(path, data) {
   return response.json();
 }
 function element(tag, text, cls='') { const e=document.createElement(tag); e.textContent=text; if(cls)e.className=cls; return e; }
+function fillMarkdown(body,event,{preview=false,heading=null}={}){
+  const apply=(text,fallback=false)=>{
+    body.setAttribute('aria-busy','false');
+    if(preview)body.textContent='“'+BetweenMarkdown.plainText(text).replace(/\s+/g,' ').slice(0,100)+'”';
+    else body.innerHTML=BetweenMarkdown.render(text)+(fallback?'<p class="format-note">原始格式不可用，显示已存摘录；不猜测丢失的表格或列表边界。</p>':'');
+    if(heading)heading.textContent=BetweenMarkdown.plainText(text).split('\n')[0].slice(0,64);
+  };
+  if(!event.event_id||!state?.history_enabled)apply(event.summary);
+  else{body.textContent='正在还原原文排版…';body.setAttribute('aria-busy','true');if(heading)heading.textContent=BetweenMarkdown.plainText(event.summary).slice(0,64);}
+  if(!event.event_id)return;
+  markdownJobs.set(body,{event,apply});
+  if(markdownObserver)markdownObserver.observe(body);else Promise.resolve().then(()=>hydrateMarkdown(body));
+}
+async function hydrateMarkdown(body){
+  const job=markdownJobs.get(body);if(!job||!state?.history_enabled||!body.isConnected)return;
+  const key=job.event.event_id+':'+(job.event.source_hash||'');
+  if(!markdownCache.has(key))markdownCache.set(key,api('source',{event_id:job.event.event_id}).then(data=>({text:data.markdown||data.summary,fallback:!data.markdown})));
+  try{const data=await markdownCache.get(key);if(state?.history_enabled&&body.isConnected)job.apply(data.text,data.fallback);}
+  catch(_){markdownCache.delete(key);if(state?.history_enabled&&body.isConnected)job.apply(job.event.summary,true);}
+}
 function empty(text) { $('cards').replaceChildren(element('div',text,'empty')); }
 function closePanel() { panelClosed=true; $('panel').hidden=true; $('panel-reopen').hidden=false; if(state)state.sessions.forEach(s=>dismissed.add(s.id+':'+s.turn_id)); }
 function openPanel() { panelClosed=false; $('panel').hidden=false; $('panel-reopen').hidden=true; }
@@ -33,10 +60,11 @@ $('settings-open').onclick=()=>$('settings-dialog').showModal();
 async function source(event, card=null) {
   try {
     const data=await api('source',{event_id:event.event_id});
+    if(!state?.history_enabled)return;
     $('source-verified').textContent=data.verified?'✓ 原始记录哈希与摘录一致':'⚠ 原始记录已变化或不可用；下面是导入时保存的摘录';
-    $('source-quote').textContent=data.summary;
+    $('source-quote').innerHTML=BetweenMarkdown.render(data.markdown||data.summary);
     const dl=$('source-location');dl.replaceChildren();
-    for(const [name,value] of [['会话',data.source_provider+' / '+data.source_session_id],['原始位置',data.source_path+':'+data.source_line],['记录 SHA-256',data.source_hash]])dl.append(element('dt',name),element('dd',value));
+    for(const [name,value] of [['会话',data.source_provider+' / '+data.source_session_id],['原始位置',(data.source_resolved_path||data.source_path)+':'+data.source_line],['记录 SHA-256',data.source_hash]])dl.append(element('dt',name),element('dd',value));
     $('source-dialog').showModal();
     await api('read',{event_id:event.event_id});event.read_at=Date.now()/1000;
     const marker=card?.querySelector('.unread');if(marker)marker.textContent='已读';
@@ -52,6 +80,9 @@ async function loadCards() {
   if(!state)return;
   const request=++contentRequest,requestedMode=mode;
   if(!state.history_enabled){
+    markdownCache.clear();markdownObserver?.disconnect();
+    if($('source-dialog').open)$('source-dialog').close();
+    $('source-quote').replaceChildren();$('source-location').replaceChildren();$('source-verified').textContent='';
     chronicleData=null;$('chronicles').replaceChildren();$('cards').replaceChildren();
     const target=mode==='timeline'?$('chronicles'):$('cards');
     target.append(element('div','历史分析已关闭。你仍可以展开上方的会话列表；需要时在隐私设置中重新启用。','empty'));return;
@@ -72,7 +103,8 @@ async function loadCards() {
 }
 function eventCard(event) {
   const card=$('card-template').content.firstElementChild.cloneNode(true);
-  for(const [selector,text]of[['.card-date',event.date],['.kind',kinds[event.kind]||event.kind],['.category',categories[event.category]||event.category],['.unread',event.read_at?'已读':'未读'],['h2',event.title],['.quote',event.summary],['.provider',event.source_provider.toUpperCase()+' · 原文摘录']])card.querySelector(selector).textContent=text;
+  for(const [selector,text]of[['.card-date',event.date],['.kind',kinds[event.kind]||event.kind],['.category',categories[event.category]||event.category],['.unread',event.read_at?'已读':'未读'],['.provider',event.source_provider.toUpperCase()+' · 原文摘录']])card.querySelector(selector).textContent=text;
+  fillMarkdown(card.querySelector('.quote'),event,{heading:card.querySelector('h2')});
   card.querySelector('.evidence').onclick=()=>source(event,card);return card;
 }
 async function openChronicle(key) {
@@ -101,7 +133,8 @@ function renderChronicles(data) {
   if(!topics.length)grid.append(element('p','这个分类在当前月份没有记录。','empty'));
   topics.forEach((topic)=>{
     const book=element('button','','topic-book');book.setAttribute('aria-label','阅读'+topic.title+'列传');
-    book.append(element('span',topic.domain_label+' / 卷 '+String(data.topics.indexOf(topic)+1).padStart(2,'0'),'book-label'),element('h3',topic.title),element('p',topic.subtitle,'book-subtitle'),element('p','“'+topic.preview+'”','book-preview'));
+    const preview=element('p','','book-preview');fillMarkdown(preview,{...topic.preview_event,summary:topic.preview},{preview:true});
+    book.append(element('span',topic.domain_label+' / 卷 '+String(data.topics.indexOf(topic)+1).padStart(2,'0'),'book-label'),element('h3',topic.title),element('p',topic.subtitle,'book-subtitle'),preview);
     const bottom=element('div','','book-bottom');bottom.append(element('span',topic.count+' 条原文 · '+topic.sessions+' 段会话'),element('span','翻开这一卷 ↗'));
     book.append(element('p',topic.first_date+' — '+topic.last_date,'book-dates'),bottom);book.onclick=()=>openChronicle(topic.id);grid.append(book);
   });
@@ -116,7 +149,7 @@ function renderDossier(topic,root) {
   const chapters=element('div','','chapter-grid');
   for(const[kind,title]of[['request','卷首 · 当时的请求'],['decision','转折 · 明确的选择'],['reported_result','回声 · 助手自报的阶段结果'],['open_question','留白 · 当时尚未解决']]){
     const event=topic.chapters[kind];if(!event)continue;
-    const chapter=element('article','','chapter');chapter.append(element('h3',title),element('small',event.date),element('p',event.summary));
+    const chapter=element('article','','chapter'),body=element('div','','markdown');fillMarkdown(body,event);chapter.append(element('h3',title),element('small',event.date),body);
     const link=element('button','查看这段原文 ↗','evidence');link.onclick=()=>source(event);chapter.append(link);chapters.append(chapter);
   }
   root.append(chapters,element('p','章节为现有记录的选段。助手自报不等于独立验证；当时未解的问题也可能已在后续会话解决。同日记录按会话与原文行号排列，不代表跨会话先后。','chronicle-note'));

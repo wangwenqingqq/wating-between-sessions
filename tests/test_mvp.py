@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -8,6 +9,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -15,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'demo'))
 from core.codex_watcher import CodexWatcher
-from core.history_parser import import_history, parse_session, select_content, verify_evidence
+from core.history_parser import import_history, parse_session, select_content, verify_evidence, inspect_evidence, markdown_excerpt
 from core.state_manager import StateManager
 from core.store import Store
 from server import Server
@@ -168,6 +170,42 @@ class MVPTests(unittest.TestCase):
         path.write_text(path.read_text().replace('重复弹窗', '新的问题'))
         self.assertFalse(verify_evidence(event))
 
+    def test_markdown_restoration_preserves_structure_and_frozen_evidence(self):
+        text = '## Result\n\n**Important** choice with `code`.\n\n- first\n- second\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n```python\nprint(1)\n```'
+        path = self.root / 'markdown.jsonl'
+        path.write_text(json.dumps(codex_message(text)) + '\n')
+        event = parse_session(path, 'codex')[1][0]
+        frozen = dict(event)
+        self.assertNotIn('\n', event['summary'])
+        self.assertEqual(inspect_evidence(event), dict(verified=True, markdown=text))
+        self.assertEqual(event, frozen)
+        self.assertEqual(parse_session(path, 'codex')[1][0], frozen)
+        self.assertEqual(len(markdown_excerpt('## Heading\n' + 'a' * 2000)), 1200)
+        self.assertEqual(markdown_excerpt('api_key=' + 'x' * 24), '')
+        html_code = 'HTML example:\n\n```html\n<strong>safe text</strong>\n```'
+        self.assertEqual(markdown_excerpt(html_code), html_code)
+        path.write_text(json.dumps(codex_message('Changed content')) + '\n')
+        self.assertEqual(inspect_evidence(event), dict(verified=False, markdown=''))
+
+    @unittest.skipUnless(shutil.which('zstd'), 'Optional zstd CLI is not installed')
+    def test_compressed_original_restores_identical_markdown_without_unpacking(self):
+        text = '## Preserved\n\n| Name | Empty | Last |\n| --- | --- | --- |\n| A | | B |\n\n计算 7 - 3 + 2 = 6。'
+        path = self.root / 'compressed.jsonl'
+        path.write_text(json.dumps(codex_message(text)) + '\n')
+        event = parse_session(path, 'codex')[1][0]
+        compressed = Path(str(path) + '.zst')
+        subprocess.run([shutil.which('zstd'), '-q', '-f', '-o', str(compressed), str(path)], check=True)
+        path.unlink()
+        recovered = inspect_evidence(event)
+        self.assertTrue(recovered['verified'])
+        self.assertEqual(recovered['markdown'], text)
+        self.assertEqual(recovered['source_resolved_path'], str(compressed.resolve()))
+        self.assertFalse(path.exists())
+        with patch('core.history_parser.shutil.which', return_value=None):
+            self.assertEqual(inspect_evidence(event), dict(verified=False, markdown=''))
+        compressed.write_bytes(b'invalid compressed data')
+        self.assertEqual(inspect_evidence(event), dict(verified=False, markdown=''))
+
     def test_cache_is_provider_and_per_file_version_specific(self):
         path = self.history()
         self.store.set('history_enabled', True)
@@ -315,6 +353,11 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertIn("frame-ancestors 'none'", response.headers['Content-Security-Policy'])
         self.assertEqual(self.request('/api/state').status, 200)
+        for path in ['/markdown.js', '/vendor/markdown-it.min.js']:
+            response = self.request(path)
+            self.assertEqual(response.status, 200)
+            self.assertIn('text/javascript', response.headers['Content-Type'])
+        self.assertEqual(self.request('/vendor/markdown-it.LICENSE').status, 404)
 
     def test_http_settings_and_delete(self):
         self.assertEqual(self.request('/api/settings', data={'auto_show': 'yes'}).status, 400)
@@ -322,6 +365,27 @@ class HTTPTests(unittest.TestCase):
         self.assertFalse(self.store.get('auto_show'))
         self.assertEqual(self.request('/api/delete-history', data={'confirm': 'no'}).status, 400)
         self.assertEqual(self.request('/api/delete-history', data={'confirm': 'DELETE'}).status, 200)
+
+    def test_source_markdown_requires_consent_and_does_not_mark_read(self):
+        path = self.root / 'markdown/session.jsonl'
+        path.parent.mkdir()
+        text = '# Title\n\n- **first**\n- second'
+        path.write_text(json.dumps(codex_message(text)) + '\n')
+        self.store.set('history_enabled', True)
+        import_history(self.store, path.parent, 'codex')
+        event = select_content(self.store)[0]
+        body = {'event_id': event['event_id']}
+        self.assertEqual(self.request('/api/source', data=body, auth=False).status, 401)
+        self.assertEqual(self.request('/api/source', data=body, Origin='https://evil.invalid').status, 403)
+        source = json.load(self.request('/api/source', data=body))
+        self.assertTrue(source['verified'])
+        self.assertEqual(source['markdown'], text)
+        self.assertEqual(source['summary'], event['summary'])
+        self.assertEqual(select_content(self.store)[0]['read_at'], 0)
+        path.write_text(json.dumps(codex_message('Changed')) + '\n')
+        self.assertEqual(json.load(self.request('/api/source', data=body))['markdown'], '')
+        self.store.set('history_enabled', False)
+        self.assertEqual(self.request('/api/source', data=body).status, 403)
 
     def test_chronicles_auth_consent_and_topic_validation(self):
         self.assertEqual(self.request('/api/chronicles', auth=False).status, 401)

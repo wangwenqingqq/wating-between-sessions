@@ -109,6 +109,18 @@ MVP does not manipulate that trust state or claim to install such hooks.
   questions. Chapters with no supporting record are omitted, never invented.
 - Cards are bounded excerpts of user text / final assistant messages, not invented
   biographical facts. No analysis or tool-output record is displayed.
+- Chapters, cards and the evidence dialog render Markdown headings, lists,
+  emphasis, tables, quotes and fenced code. The legacy 360-character normalized
+  excerpt, IDs and evidence hashes remain unchanged. Visible excerpts lazily
+  recover up to 1,200 characters of original Markdown from the same source record
+  only after its hash and saved excerpt match. Missing/changed sources fall back
+  to the stored excerpt; lost list/table boundaries are never guessed. An
+  adjacent `.jsonl.zst` original can be read through an installed `zstd` CLI;
+  decompressed lines must pass the identical hash/excerpt checks. No unpacked
+  file is created, and the source dialog shows the compressed source path.
+  Without the original/decoder, the view explicitly labels the saved fallback.
+- Shelf previews and card titles show readable text rather than Markdown tokens.
+  Formatting requests do not mark records read, reimport history or mutate the DB.
 - An assistant-reported result is not independent proof of task completion.
 - Discovery finds explicit historical unresolved/pending wording; it does not
   assert that the issue remains open today.
@@ -131,7 +143,14 @@ Default storage: `~/.local/share/agent-waiting-experience/`, directory `0700`,
 SQLite/access-key/log files `0600`. The server binds only to `127.0.0.1`.
 Private API routes require a random bearer key; cross-origin requests and invalid
 Host headers are rejected. There is no CORS, remote font, external asset, model
-request, or analytics endpoint. Text uses DOM `textContent`, never history HTML.
+request, or analytics endpoint. Metadata uses DOM `textContent`; Markdown uses
+the locally bundled markdown-it parser with raw HTML disabled. Remote images are
+rendered as labels, not loaded. Links allow only HTTP(S) without credentials and
+strict local chat deep links; web links use `noopener noreferrer`. No CDN or
+runtime package download is needed. See the vendored license and integrity
+manifest in `demo/ui/web/vendor/README.md`. Formatting caches stay in page memory
+and are cleared when history is disabled; disconnected/disabled views ignore
+in-flight formatting responses.
 The bootstrap key is a URL fragment, not an HTTP query or server access log.
 
 History import requires `--consent` for a selected root. The UI can disable

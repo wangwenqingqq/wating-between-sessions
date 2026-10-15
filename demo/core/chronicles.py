@@ -36,7 +36,8 @@ def topic_summary(definition, events):
     return dict(id=key, title=title, domain=domain, domain_label=DOMAINS[domain], subtitle=subtitle,
                 count=len(events), sessions=len({(e['source_provider'], e['source_session_id']) for e in events}),
                 first_date=events[0]['date'] if events else '', last_date=events[-1]['date'] if events else '',
-                kinds=counts, preview=opening['summary'][:100] if opening else '')
+                kinds=counts, preview=opening['summary'][:100] if opening else '',
+                preview_event={k: opening[k] for k in ('event_id', 'source_hash')} if opening else None)
 
 
 def load_chronicles(store, month='', topic=''):

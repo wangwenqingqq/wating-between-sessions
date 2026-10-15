@@ -1,7 +1,10 @@
 import hashlib
 import json
 import re
+import shutil
+import subprocess
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -193,15 +196,62 @@ def select_content(store, mode='timeline', month='', topic='', limit=100):
     return [dict(row) for row in rows]
 
 
-def verify_evidence(event):
+def markdown_excerpt(text):
+    if not excerpt(text):
+        return ''
+    if '## My request:' in text:
+        text = text.split('## My request:', 1)[1]
+    if '</environment_context>' in text:
+        text = text.rsplit('</environment_context>', 1)[1]
+    text = re.sub(r'<(INSTRUCTIONS|environment_context|permissions|external_[\w-]*|system|developer)\b[^>]*>.*?</\1>', '', text, flags=re.S | re.I)
+    text = re.sub(r':codex-[a-z-]+(?:\[[^]]*\])?\{[^}]*\}', '', text)
+    lines = [line.rstrip() for line in text.splitlines() if not line.lstrip().startswith(NOISE)]
+    return '\n'.join(lines).strip()[:1200]
+
+
+@contextmanager
+def source_stream(path):
+    if path.is_file():
+        with path.open('rb') as stream:
+            yield stream, str(path)
+        return
+    compressed = Path(str(path) + '.zst')
+    decoder = shutil.which('zstd') if compressed.is_file() else None
+    if not decoder:
+        raise FileNotFoundError('Original source is unavailable')
+    # Read an adjacent compressed original only; never create an unpacked copy or use a shell.
+    with subprocess.Popen([decoder, '-d', '-c', '-q', '--', str(compressed)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as child:
+        try:
+            yield child.stdout, str(compressed)
+        finally:
+            child.stdout.close()
+            if child.poll() is None:
+                child.terminate()
+
+
+def inspect_evidence(event):
     try:
-        with Path(event['source_path']).open('rb') as f:
-            for line, raw in enumerate(f, 1):
+        with source_stream(Path(event['source_path'])) as (f, resolved):
+            consumed = 0
+            for line in range(1, event['source_line'] + 1):
+                raw = f.readline(16 * 1024 ** 2 - consumed + 1)
+                consumed += len(raw)
+                if not raw or consumed > 16 * 1024 ** 2:
+                    break
                 if line == event['source_line']:
                     if hashlib.sha256(raw).hexdigest() != event['source_hash']:
-                        return False
+                        break
                     role, text = message(json.loads(raw), event['source_provider'])
-                    return bool(role) and excerpt(text) == event['summary']
+                    if role and excerpt(text) == event['summary']:
+                        result = dict(verified=True, markdown=markdown_excerpt(text))
+                        if resolved != event['source_path']:
+                            result['source_resolved_path'] = resolved
+                        return result
+                    break
     except (OSError, ValueError, TypeError):
         pass
-    return False
+    return dict(verified=False, markdown='')
+
+
+def verify_evidence(event):
+    return inspect_evidence(event)['verified']

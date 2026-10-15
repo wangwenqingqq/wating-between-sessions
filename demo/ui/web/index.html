@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Between · Agent 等待空间</title>
-  <link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script>
+  <link rel="stylesheet" href="/style.css"><script defer src="/vendor/markdown-it.min.js"></script><script defer src="/markdown.js"></script><script defer src="/app.js"></script>
 </head>
 <body>
   <header><a class="brand" href="/">between<span>等候之间</span></a><div class="local"><i></i> 只在你的电脑上</div><button id="settings-open" class="quiet">隐私与设置</button></header>
@@ -21,7 +21,7 @@
     </section>
     <footer><span>LOCAL FIRST · NO MODEL API · NO ANALYTICS</span><span>完成时轻声提醒，不打断你正在读的内容。</span></footer>
   </main>
-  <dialog id="source-dialog"><div class="dialog-head"><h2>原始对话证据</h2><button class="quiet dialog-close" aria-label="关闭证据">关闭</button></div><p id="source-verified"></p><blockquote id="source-quote"></blockquote><dl id="source-location"></dl><p class="subtle">原文仅证明当时说过这些内容；助手自报完成不等于独立验证。历史问题也可能已在后续会话解决。</p></dialog>
+  <dialog id="source-dialog"><div class="dialog-head"><h2>原始对话证据</h2><button class="quiet dialog-close" aria-label="关闭证据">关闭</button></div><p id="source-verified"></p><div id="source-quote" class="markdown source-content"></div><p class="subtle">原始记录可核验时恢复其排版，最多显示 1200 字符；原始格式不可用时显示已存摘录，不猜测丢失的结构。</p><dl id="source-location"></dl><p class="subtle">原文仅证明当时说过这些内容；助手自报完成不等于独立验证。历史问题也可能已在后续会话解决。</p></dialog>
   <dialog id="settings-dialog"><div class="dialog-head"><h2>把控制权留给你</h2><button class="quiet dialog-close">关闭</button></div><label class="toggle"><span><strong>自动展示</strong><small>持续工作超过 5 秒后，每轮最多展示一次。</small></span><input type="checkbox" id="auto-show"></label><label class="toggle"><span><strong>历史分析</strong><small>关闭后隐藏历史内容；重新导入需在本机显式授权。</small></span><input type="checkbox" id="history-enabled"></label><button id="notify-enable" class="outlined">允许浏览器完成提醒</button><p id="notify-status" class="subtle">未授权时仍会显示页内完成提醒。</p><hr><button id="delete-history" class="danger">删除本地派生时间线</button><p class="subtle">同时关闭历史分析，不删除你的原始会话。没有后台自动重新导入。</p></dialog>
-  <template id="card-template"><article class="card"><div class="card-date"></div><div class="card-body"><div class="card-meta"><span class="kind"></span><span class="category"></span><span class="unread"></span></div><h2></h2><p class="quote"></p><div class="card-bottom"><span class="provider"></span><button class="evidence">查看原文 <span aria-hidden="true">↗</span></button></div></div></article></template>
+  <template id="card-template"><article class="card"><div class="card-date"></div><div class="card-body"><div class="card-meta"><span class="kind"></span><span class="category"></span><span class="unread"></span></div><h2></h2><div class="quote markdown"></div><div class="card-bottom"><span class="provider"></span><button class="evidence">查看原文 <span aria-hidden="true">↗</span></button></div></div></article></template>
 </body></html>

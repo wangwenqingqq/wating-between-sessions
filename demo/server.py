@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from core.codex_watcher import CodexWatcher
 from core.chronicles import load_chronicles
-from core.history_parser import select_content, verify_evidence
+from core.history_parser import select_content, inspect_evidence
 from core.state_manager import StateManager
 
 
@@ -81,9 +81,9 @@ class Handler(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         if not self.allowed(auth=url.path.startswith('/api/')):
             return
-        if url.path in {'/', '/app.js', '/style.css'}:
-            name = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css'}[url.path]
-            content_type = {'/': 'text/html; charset=utf-8', '/app.js': 'text/javascript; charset=utf-8', '/style.css': 'text/css; charset=utf-8'}[url.path]
+        if url.path in {'/', '/app.js', '/style.css', '/markdown.js', '/vendor/markdown-it.min.js'}:
+            name = 'index.html' if url.path == '/' else url.path[1:]
+            content_type = 'text/html; charset=utf-8' if url.path == '/' else ('text/css; charset=utf-8' if url.path == '/style.css' else 'text/javascript; charset=utf-8')
             return self.reply(200, (WEB / name).read_bytes(), content_type)
         if url.path == '/health':
             return self.reply(200, {'ok': True, 'app': 'agent-waiting-experience'})
@@ -164,7 +164,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(404, {'error': 'No such event'})
             event = dict(row)
             if self.path == '/api/source':
-                event['verified'] = verify_evidence(event)
+                event.update(inspect_evidence(event))
+                if not store.get('history_enabled', False):
+                    return self.reply(403, {'error': 'History disabled'})
             return self.reply(200, event)
         self.reply(404, {'error': 'Not found'})
 
